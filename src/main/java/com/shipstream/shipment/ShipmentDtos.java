@@ -1,4 +1,4 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;

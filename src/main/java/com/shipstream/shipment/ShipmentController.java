@@ -1,7 +1,7 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
-import com.flowtrack.shipment.ShipmentDtos.CreateShipmentRequest;
-import com.flowtrack.shipment.ShipmentDtos.ShipmentResponse;
+import com.shipstream.shipment.ShipmentDtos.CreateShipmentRequest;
+import com.shipstream.shipment.ShipmentDtos.ShipmentResponse;
 import jakarta.validation.Valid;
 import java.net.URI;
 import org.springframework.http.ResponseEntity;

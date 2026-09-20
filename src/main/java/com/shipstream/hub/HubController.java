@@ -1,7 +1,7 @@
-package com.flowtrack.hub;
+package com.shipstream.hub;
 
-import com.flowtrack.common.NotFoundException;
-import com.flowtrack.hub.HubDtos.*;
+import com.shipstream.common.NotFoundException;
+import com.shipstream.hub.HubDtos.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;

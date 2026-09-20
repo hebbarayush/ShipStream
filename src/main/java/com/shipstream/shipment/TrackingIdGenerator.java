@@ -1,4 +1,4 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
 import java.security.SecureRandom;
 import org.springframework.stereotype.Component;

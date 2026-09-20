@@ -1,8 +1,8 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
-import com.flowtrack.common.NotFoundException;
-import com.flowtrack.hub.Hub;
-import com.flowtrack.hub.HubRepository;
+import com.shipstream.common.NotFoundException;
+import com.shipstream.hub.Hub;
+import com.shipstream.hub.HubRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

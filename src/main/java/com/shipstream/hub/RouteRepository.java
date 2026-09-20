@@ -1,4 +1,4 @@
-package com.flowtrack.hub;
+package com.shipstream.hub;
 
 import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;

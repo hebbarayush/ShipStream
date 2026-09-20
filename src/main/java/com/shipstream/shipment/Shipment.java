@@ -1,6 +1,6 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
-import com.flowtrack.hub.Hub;
+import com.shipstream.hub.Hub;
 import jakarta.persistence.*;
 import java.time.Instant;
 import lombok.Getter;

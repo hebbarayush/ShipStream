@@ -1,4 +1,4 @@
-package com.flowtrack.hub;
+package com.shipstream.hub;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

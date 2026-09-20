@@ -1,4 +1,4 @@
-package com.flowtrack.shipment;
+package com.shipstream.shipment;
 
 public enum ShipmentStatus {
     CREATED,

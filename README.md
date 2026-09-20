@@ -1,4 +1,4 @@
-# FlowTrack
+# ShipStream
 
 Real-time logistics & shipment tracking backend — Spring Boot, PostgreSQL, Redis, WebSockets.
 Focus: state machines, concurrency safety, transactional outbox, live updates, multi-instance job coordination.

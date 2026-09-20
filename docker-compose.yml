@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: flowtrack
-      POSTGRES_USER: flowtrack
-      POSTGRES_PASSWORD: flowtrack
+      POSTGRES_DB: shipstream
+      POSTGRES_USER: shipstream
+      POSTGRES_PASSWORD: shipstream
     ports:
       - "5433:5432"   # 5433 to avoid clashing with a local Postgres install
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flowtrack"]
+      test: ["CMD-SHELL", "pg_isready -U shipstream"]
       interval: 5s
       retries: 10
 

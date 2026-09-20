@@ -8,10 +8,10 @@
 		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.flowtrack</groupId>
-	<artifactId>flowtrack</artifactId>
+	<groupId>com.shipstream</groupId>
+	<artifactId>shipstream</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>flowtrack</name>
+	<name>shipstream</name>
 	<description/>
 	<url/>
 	<licenses>

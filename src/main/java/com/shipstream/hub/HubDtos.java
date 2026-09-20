@@ -1,4 +1,4 @@
-package com.flowtrack.hub;
+package com.shipstream.hub;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

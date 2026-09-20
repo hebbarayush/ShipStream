@@ -1,4 +1,4 @@
-# FlowTrack — Design Plan
+# ShipStream — Design Plan
 
 Real-time logistics & shipment tracking backend. Companion to RentalOps; the goal is to demonstrate
 **state machines, concurrency safety, transactional outbox, real-time push, and multi-instance job coordination**.

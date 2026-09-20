@@ -1,4 +1,4 @@
-package com.flowtrack.hub;
+package com.shipstream.hub;
 
 import jakarta.persistence.*;
 import lombok.Getter;
