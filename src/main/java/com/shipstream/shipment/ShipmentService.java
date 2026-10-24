@@ -1,12 +1,12 @@
 package com.shipstream.shipment;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shipstream.common.NotFoundException;
 import com.shipstream.hub.Hub;
 import com.shipstream.hub.HubRepository;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ShipmentService {
