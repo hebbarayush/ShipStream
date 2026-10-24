@@ -66,7 +66,17 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
+			<!-- Compile scope (not the usual runtime-only): PgNotifyListener uses pgjdbc's
+			     LISTEN/NOTIFY API directly, a deliberate, documented vendor lock-in that replaces
+			     Redis pub/sub for cross-instance WebSocket fan-out. -->
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>

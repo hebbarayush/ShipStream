@@ -18,9 +18,9 @@ Tests (need Docker running — they use Testcontainers): `./mvnw verify`
 - [x] Phase 1 — core setup: hubs, routes, shipments
 - [x] Phase 2 — state machine: transitions, `shipment_events`, optimistic locking
 - [x] Phase 3 — tracking: `/tracking/update`, `/tracking/{shipmentId}`
-- [ ] Phase 4 — outbox
-- [ ] Phase 5 — WebSockets
-- [ ] Phase 6 — caching (Caffeine) + Postgres `LISTEN/NOTIFY` fan-out
-- [ ] Phase 7 — background jobs
-- [ ] Phase 8 — advanced
+- [x] Phase 4 — transactional outbox, `SKIP LOCKED` polling
+- [x] Phase 5 — WebSockets: STOMP over `/ws`, `/topic/shipments/{trackingId}`
+- [x] Phase 6 — caching (Caffeine) + Postgres `LISTEN/NOTIFY` fan-out
+- [x] Phase 7 — background jobs: `job_locks` lease + guarded scheduled jobs
+- [ ] Phase 8 — advanced (ETA, GPS simulator, delayed/lost handling)
 - [ ] Phase 9 — deployment
