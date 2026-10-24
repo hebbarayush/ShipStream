@@ -34,12 +34,12 @@ Deliberate deviations from the original doc (improvements):
 ## 2. Architecture
 
 ```
-Clients ─► REST (Spring MVC) ─► Services ─► PostgreSQL (truth)
-                 │                 │  ├── outbox_events (same tx)
-                 │                 │  └── LISTEN/NOTIFY (WS fan-out)
-                 │                 └────── Caffeine (local cache)
-   WebSocket/STOMP ◄── broadcaster ◄── OutboxProcessor / TrackingService
-                                        Scheduled jobs (job_locks)
+React SPA ─► REST (Spring MVC) ─► Services ─► PostgreSQL (truth)
+     │                │                 │  ├── outbox_events (same tx)
+     │                │                 │  └── LISTEN/NOTIFY (WS fan-out)
+     │                │                 └────── Caffeine (local cache)
+     └── STOMP/WS ◄── broadcaster ◄── OutboxProcessor / TrackingService
+                                       Scheduled jobs (job_locks)
 ```
 
 ## 3. Shipment state machine
@@ -66,7 +66,11 @@ POST /api/v1/tracking/update                                                    
 GET  /api/v1/tracking/{shipmentId}                                              [P3]
 POST /api/v1/hubs · GET /api/v1/hubs · GET /api/v1/routes                       [P1]
 WS   /ws  → /topic/shipments/{trackingId}                                       [P5]
+GET  /api/v1/shipments?status=&page=&size=  paginated list, needed by the UI table  [P9]
 ```
+`GET /api/v1/shipments` (list) doesn't exist yet — it's a Phase 9 prerequisite, added alongside the
+frontend rather than speculatively now. Phase 9 also needs CORS enabled for the dev server origin
+(`http://localhost:5173`) since the SPA and API run on different ports in development.
 
 ## 6. Phases & GitHub milestones
 Each phase = one branch/PR-sized chunk merged to `main` with a tag (`phase-1` …) and README/docs updated.
@@ -81,7 +85,43 @@ Each phase = one branch/PR-sized chunk merged to `main` with a tag (`phase-1` �
 | 6 | Caffeine cache + Postgres `LISTEN/NOTIFY` fan-out | Cache hit test, TTL, invalidation; two-instance WS fan-out test |
 | 7 | `job_locks` + scheduled jobs | Two instances, one runs the job |
 | 8 | ETA, GPS simulator, delayed/lost handling | Simulator drives a shipment end-to-end |
-| 9 | Dockerfile, CI (GitHub Actions), deploy | Live URL in README |
+| 9 | React frontend (see §8) | UI creates a shipment, tracks it by ID, and shows a live status/location update without a page refresh |
+| 10 | Dockerfile, CI (GitHub Actions), deploy (frontend + backend) | Live URL in README |
+
+Frontend before deployment, not after: Phase 10 should ship the complete product, not just the API.
+Building the UI in Phase 9, once the backend feature set (through Phase 8) is settled, avoids
+re-deploying twice and gives Phase 10 one coherent "visit this URL" demo instead of two.
 
 ## 7. Resume angle
-Lead with: state machine correctness, outbox + SKIP LOCKED, optimistic-lock concurrency test, WS + Postgres `LISTEN/NOTIFY` fan-out, lease-based job locks, single-datastore design (no Redis). Add a README architecture diagram and load/concurrency test numbers in Phase 8–9.
+Lead with: state machine correctness, outbox + SKIP LOCKED, optimistic-lock concurrency test, WS + Postgres `LISTEN/NOTIFY` fan-out, lease-based job locks, single-datastore design (no Redis). Add a README architecture diagram and load/concurrency test numbers in Phase 8–10.
+
+## 8. Phase 9: React frontend
+
+Backend-only up to here was deliberate (resume-angle work is in the services, not the UI), but the
+project isn't demoable without a UI. Scope, kept proportionate to a backend-focused project:
+
+| Concern | Decision | Why |
+|---|---|---|
+| Tooling | Vite + React + TypeScript, under `frontend/` in this repo | No backend framework coupling; fast dev loop; one repo to clone |
+| Data fetching | `fetch` + TanStack Query (cache, retry, loading/error states for free) | Avoids hand-rolled request state plumbing |
+| Real-time | `@stomp/stompjs` + `sockjs-client` against `/ws`, subscribed per open shipment | Matches the backend's existing STOMP/SockJS endpoint, no backend change needed |
+| Styling | Plain CSS modules (or Tailwind if the component count grows) | Keep the dependency graph small; this isn't the resume-selling part |
+| State | Local component state + TanStack Query cache; no Redux | App is small: a list view, a detail/tracking view, a create form |
+
+### Pages
+1. **Shipments list** — paginated table, filter by status; needs the new `GET /api/v1/shipments` endpoint.
+2. **Shipment detail / live tracking** — current status, status-transition buttons (admin-style, calls
+   `POST .../status`), a map or coordinate readout fed by the WebSocket subscription, event history from
+   `shipment_events` (needs a small new read endpoint or reuses the existing audit data).
+3. **Create shipment** — form wrapping `POST /api/v1/shipments`, with hub picker from `GET /api/v1/hubs`.
+4. **Hubs & routes (admin)** — thin CRUD screen over the existing hub/route endpoints.
+
+### Backend prerequisites (small, additive, don't touch the existing API surface)
+- `GET /api/v1/shipments` (paginated list) — doesn't exist yet.
+- CORS config for the Vite dev origin.
+- Optionally, `GET /api/v1/shipments/{id}/events` to surface the audit trail the UI would want to show.
+
+### Proof of done
+`npm run dev` serves the SPA against the locally running backend; creating a shipment, opening its
+tracking page, and firing a `POST /tracking/update` from another terminal updates the page live via
+WebSocket, no refresh.
