@@ -2,6 +2,7 @@ package com.shipstream.shipment;
 
 import com.shipstream.shipment.ShipmentDtos.CreateShipmentRequest;
 import com.shipstream.shipment.ShipmentDtos.ShipmentResponse;
+import com.shipstream.shipment.ShipmentDtos.StatusUpdateRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import org.springframework.http.ResponseEntity;
@@ -31,5 +32,10 @@ class ShipmentController {
     @GetMapping("/track/{trackingId}")
     ShipmentResponse track(@PathVariable String trackingId) {
         return ShipmentResponse.from(service.getByTrackingId(trackingId));
+    }
+
+    @PostMapping("/{id}/status")
+    ShipmentResponse updateStatus(@PathVariable Long id, @Valid @RequestBody StatusUpdateRequest req) {
+        return ShipmentResponse.from(service.transition(id, req));
     }
 }

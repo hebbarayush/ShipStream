@@ -9,7 +9,6 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
-	// Redis container is added in Phase 6.
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer postgresContainer() {

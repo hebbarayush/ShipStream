@@ -1,6 +1,7 @@
 package com.shipstream.shipment;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 
 public final class ShipmentDtos {
@@ -10,6 +11,8 @@ public final class ShipmentDtos {
             @NotBlank String senderAddress,
             @NotBlank String receiverAddress,
             Long originHubId) {}
+
+    public record StatusUpdateRequest(@NotNull ShipmentStatus status, Long hubId) {}
 
     public record ShipmentResponse(
             Long id,

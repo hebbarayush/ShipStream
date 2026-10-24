@@ -1,5 +1,6 @@
 package com.shipstream.shipment;
 
+import com.shipstream.common.InvalidTransitionException;
 import com.shipstream.hub.Hub;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -58,5 +59,18 @@ public class Shipment {
     @PreUpdate
     void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    /** Applies the transition if valid, otherwise throws. The only mutator for {@link #status}. */
+    public void transitionTo(ShipmentStatus next) {
+        if (!status.canTransitionTo(next)) {
+            throw new InvalidTransitionException(
+                    "Cannot transition shipment " + trackingId + " from " + status + " to " + next);
+        }
+        this.status = next;
+    }
+
+    public void moveToHub(Hub hub) {
+        this.currentHub = hub;
     }
 }
