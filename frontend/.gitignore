@@ -2,6 +2,3 @@ node_modules
 dist
 .env.local
 *.local
-*.tsbuildinfo
-/vite.config.js
-/vite.config.d.ts

@@ -8,12 +8,19 @@ Redis would have done for caching and cross-instance WebSocket fan-out.
 See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and phased roadmap, and
 [frontend/README.md](frontend/README.md) for the UI.
 
+## Structure
+```
+backend/    Spring Boot API (Java 21, Maven)
+frontend/   React + TypeScript UI (Vite)
+docs/       Design doc and roadmap
+```
+
 ## Run locally
 ```bash
-docker compose up -d        # Postgres :5433
-./mvnw spring-boot:run
+docker compose up -d                  # Postgres :5433, from the repo root
+cd backend && ./mvnw spring-boot:run
 ```
-Tests (need Docker running — they use Testcontainers): `./mvnw verify`
+Tests (need Docker running — they use Testcontainers): `cd backend && ./mvnw verify`
 
 Frontend (needs the backend running first):
 ```bash

@@ -11,8 +11,8 @@ the same set of CSS custom properties, so there's one theme, not four.
 Backend must be running first (see the [root README](../README.md)):
 
 ```bash
-docker compose up -d        # from the repo root
-./mvnw spring-boot:run      # from the repo root
+docker compose up -d                  # from the repo root
+cd ../backend && ./mvnw spring-boot:run
 ```
 
 Then, from this directory:
