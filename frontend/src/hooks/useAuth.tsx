@@ -18,7 +18,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   // A 401 here just means "not logged in" - that's a normal state for this query, not an error to retry.
-  const meQuery = useQuery({
+  // Cached value is AuthUser | null, never undefined: TanStack Query treats setQueryData(key, undefined)
+  // as a no-op (it does *not* clear the cache), so logout couldn't use undefined to mean "logged out".
+  const meQuery = useQuery<AuthUser | null>({
     queryKey: ["auth", "me"],
     queryFn: api.me,
     retry: false,
@@ -32,10 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: api.logout,
-    onSuccess: () => queryClient.setQueryData(["auth", "me"], undefined),
+    onSuccess: () => queryClient.setQueryData(["auth", "me"], null),
   });
 
-  const user = meQuery.error instanceof ApiError ? undefined : meQuery.data;
+  const user = meQuery.error instanceof ApiError ? undefined : (meQuery.data ?? undefined);
 
   const value: AuthContextValue = {
     user,
