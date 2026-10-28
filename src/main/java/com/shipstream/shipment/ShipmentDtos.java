@@ -10,7 +10,8 @@ public final class ShipmentDtos {
     public record CreateShipmentRequest(
             @NotBlank String senderAddress,
             @NotBlank String receiverAddress,
-            Long originHubId) {}
+            Long originHubId,
+            Long destinationHubId) {}
 
     public record StatusUpdateRequest(@NotNull ShipmentStatus status, Long hubId) {}
 
@@ -21,6 +22,8 @@ public final class ShipmentDtos {
             String receiverAddress,
             ShipmentStatus status,
             Long currentHubId,
+            Long destinationHubId,
+            Instant estimatedDeliveryAt,
             Instant createdAt,
             Instant updatedAt,
             long version) {
@@ -28,7 +31,8 @@ public final class ShipmentDtos {
         static ShipmentResponse from(Shipment s) {
             return new ShipmentResponse(s.getId(), s.getTrackingId(), s.getSenderAddress(), s.getReceiverAddress(),
                     s.getStatus(), s.getCurrentHub() == null ? null : s.getCurrentHub().getId(),
-                    s.getCreatedAt(), s.getUpdatedAt(), s.getVersion());
+                    s.getDestinationHub() == null ? null : s.getDestinationHub().getId(),
+                    s.getEstimatedDeliveryAt(), s.getCreatedAt(), s.getUpdatedAt(), s.getVersion());
         }
     }
 }

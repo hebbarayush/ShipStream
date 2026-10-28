@@ -7,11 +7,17 @@ import jakarta.validation.constraints.NotNull;
 public final class HubDtos {
     private HubDtos() {}
 
-    public record CreateHubRequest(@NotBlank String name, @NotBlank String location, @Min(1) int capacity) {}
+    public record CreateHubRequest(
+            @NotBlank String name,
+            @NotBlank String location,
+            @Min(1) int capacity,
+            @NotNull Double latitude,
+            @NotNull Double longitude) {}
 
-    public record HubResponse(Long id, String name, String location, int capacity) {
+    public record HubResponse(Long id, String name, String location, int capacity, double latitude, double longitude) {
         static HubResponse from(Hub h) {
-            return new HubResponse(h.getId(), h.getName(), h.getLocation(), h.getCapacity());
+            return new HubResponse(h.getId(), h.getName(), h.getLocation(), h.getCapacity(),
+                    h.getLatitude(), h.getLongitude());
         }
     }
 

@@ -51,14 +51,8 @@ class ShipmentApiTest {
 
     @Test
     void hubsAndRoutesCanBeCreatedAndListed() throws Exception {
-        String a = mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"BLR-1\",\"location\":\"Bengaluru\",\"capacity\":500}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        String b = mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"CCU-1\",\"location\":\"Kolkata\",\"capacity\":400}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        long idA = Long.parseLong(a.replaceAll(".*\"id\":(\\d+).*", "$1"));
-        long idB = Long.parseLong(b.replaceAll(".*\"id\":(\\d+).*", "$1"));
+        long idA = createHub("BLR-1", "Bengaluru", 500, 12.97, 77.59);
+        long idB = createHub("CCU-1", "Kolkata", 400, 22.57, 88.36);
 
         mvc.perform(post("/api/v1/routes").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":1870}".formatted(idA, idB)))
@@ -132,6 +126,61 @@ class ShipmentApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.latitude").value(22.57))
                 .andExpect(jsonPath("$.longitude").value(88.36));
+    }
+
+    @Test
+    void cancellationIsAllowedBeforePickupButNotAfter() throws Exception {
+        Long id = createShipment();
+        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        Long id2 = createShipment();
+        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PICKED_UP\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_TRANSIT\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void etaIsComputedOnceInTransitWithADirectRoute() throws Exception {
+        long origin = createHub("ORG-1", "Origin City", 500, 12.97, 77.59);
+        long dest = createHub("DST-1", "Dest City", 500, 22.57, 88.36);
+        mvc.perform(post("/api/v1/routes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":100}".formatted(origin, dest)))
+                .andExpect(status().isCreated());
+
+        String body = """
+                {"senderAddress":"A","receiverAddress":"B","originHubId":%d,"destinationHubId":%d}
+                """.formatted(origin, dest);
+        String response = mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estimatedDeliveryAt").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        long id = Long.parseLong(response.replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PICKED_UP\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_TRANSIT\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estimatedDeliveryAt").exists());
+    }
+
+    private long createHub(String name, String location, int capacity, double lat, double lon) throws Exception {
+        String response = mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"%s\",\"location\":\"%s\",\"capacity\":%d,\"latitude\":%s,\"longitude\":%s}"
+                                .formatted(name, location, capacity, lat, lon)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return Long.parseLong(response.replaceAll(".*\"id\":(\\d+).*", "$1"));
     }
 
     private Long createShipment() throws Exception {

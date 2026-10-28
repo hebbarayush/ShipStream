@@ -9,8 +9,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 class ShipmentStatusTest {
 
-    private static final Set<ShipmentStatus> NON_TERMINAL =
-            EnumSet.complementOf(EnumSet.of(ShipmentStatus.DELIVERED));
+    private static final Set<ShipmentStatus> NON_TERMINAL = EnumSet.complementOf(
+            EnumSet.of(ShipmentStatus.DELIVERED, ShipmentStatus.LOST, ShipmentStatus.CANCELLED));
 
     @ParameterizedTest
     @EnumSource(ShipmentStatus.class)
@@ -46,8 +46,32 @@ class ShipmentStatusTest {
     }
 
     @org.junit.jupiter.api.Test
-    void deliveredIsTerminal() {
+    void deliveredLostAndCancelledAreTerminal() {
         assertThat(ShipmentStatus.DELIVERED.isTerminal()).isTrue();
+        assertThat(ShipmentStatus.LOST.isTerminal()).isTrue();
+        assertThat(ShipmentStatus.CANCELLED.isTerminal()).isTrue();
         assertThat(ShipmentStatus.DELIVERED.canTransitionTo(ShipmentStatus.CREATED)).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void cancellationOnlyBeforePickup() {
+        assertThat(ShipmentStatus.CREATED.canTransitionTo(ShipmentStatus.CANCELLED)).isTrue();
+        assertThat(ShipmentStatus.PICKED_UP.canTransitionTo(ShipmentStatus.CANCELLED)).isTrue();
+        assertThat(ShipmentStatus.IN_TRANSIT.canTransitionTo(ShipmentStatus.CANCELLED)).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void lostIsReachableOnceInTransitButNotBeforePickup() {
+        assertThat(ShipmentStatus.IN_TRANSIT.canTransitionTo(ShipmentStatus.LOST)).isTrue();
+        assertThat(ShipmentStatus.OUT_FOR_DELIVERY.canTransitionTo(ShipmentStatus.LOST)).isTrue();
+        assertThat(ShipmentStatus.CREATED.canTransitionTo(ShipmentStatus.LOST)).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void delayedResumesTheFlowItStalledFrom() {
+        assertThat(ShipmentStatus.IN_TRANSIT.canTransitionTo(ShipmentStatus.DELAYED)).isTrue();
+        assertThat(ShipmentStatus.DELAYED.canTransitionTo(ShipmentStatus.IN_TRANSIT)).isTrue();
+        assertThat(ShipmentStatus.DELAYED.canTransitionTo(ShipmentStatus.OUT_FOR_DELIVERY)).isTrue();
+        assertThat(ShipmentStatus.DELAYED.canTransitionTo(ShipmentStatus.CANCELLED)).isFalse();
     }
 }

@@ -19,24 +19,27 @@ public class ShipmentService {
     private final ShipmentEventRepository events;
     private final OutboxWriter outbox;
     private final TrackingIdGenerator idGenerator;
+    private final EtaService eta;
     private final ObjectMapper objectMapper;
 
     ShipmentService(ShipmentRepository shipments, HubRepository hubs, ShipmentEventRepository events,
-            OutboxWriter outbox, TrackingIdGenerator idGenerator, ObjectMapper objectMapper) {
+            OutboxWriter outbox, TrackingIdGenerator idGenerator, EtaService eta, ObjectMapper objectMapper) {
         this.shipments = shipments;
         this.hubs = hubs;
         this.events = events;
         this.outbox = outbox;
         this.idGenerator = idGenerator;
+        this.eta = eta;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public Shipment create(ShipmentDtos.CreateShipmentRequest req) {
-        Hub origin = req.originHubId() == null ? null : hubs.findById(req.originHubId())
-                .orElseThrow(() -> new NotFoundException("Hub " + req.originHubId() + " not found"));
+        Hub origin = hub(req.originHubId());
+        Hub destination = hub(req.destinationHubId());
         // tracking_id is UNIQUE; a (vanishingly unlikely) collision surfaces as 409 rather than an overwrite
-        Shipment shipment = shipments.save(new Shipment(idGenerator.next(), req.senderAddress(), req.receiverAddress(), origin));
+        Shipment shipment = shipments.save(
+                new Shipment(idGenerator.next(), req.senderAddress(), req.receiverAddress(), origin, destination));
         recordEvent(shipment, "SHIPMENT_CREATED", Map.of("status", shipment.getStatus()));
         return shipment;
     }
@@ -59,6 +62,9 @@ public class ShipmentService {
      * column: two concurrent transitions on the same shipment race on the UPDATE's
      * {@code WHERE version = ?} and the loser gets an {@code ObjectOptimisticLockingFailureException}
      * (mapped to 409 by the client).
+     *
+     * <p>Entering {@code IN_TRANSIT} (including resuming from {@code DELAYED}) refreshes the ETA off
+     * the shipment's current leg; reaching a terminal status clears it.
      */
     @CacheEvict(value = "shipments", key = "#id")
     @Transactional
@@ -67,12 +73,25 @@ public class ShipmentService {
         ShipmentStatus from = shipment.getStatus();
         shipment.transitionTo(req.status());
         if (req.hubId() != null) {
-            Hub hub = hubs.findById(req.hubId())
-                    .orElseThrow(() -> new NotFoundException("Hub " + req.hubId() + " not found"));
-            shipment.moveToHub(hub);
+            shipment.moveToHub(hub(req.hubId()));
         }
+        refreshEta(shipment);
         recordEvent(shipment, "STATUS_CHANGED", Map.of("from", from, "to", req.status()));
         return shipment;
+    }
+
+    private void refreshEta(Shipment shipment) {
+        if (shipment.getStatus() == ShipmentStatus.IN_TRANSIT) {
+            shipment.setEstimatedDeliveryAt(
+                    eta.estimate(shipment.getCurrentHub(), shipment.getDestinationHub()).orElse(null));
+        } else if (shipment.getStatus().isTerminal()) {
+            shipment.setEstimatedDeliveryAt(null);
+        }
+    }
+
+    private Hub hub(Long id) {
+        return id == null ? null
+                : hubs.findById(id).orElseThrow(() -> new NotFoundException("Hub " + id + " not found"));
     }
 
     private void recordEvent(Shipment shipment, String type, Map<String, Object> payload) {

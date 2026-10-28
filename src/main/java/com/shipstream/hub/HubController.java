@@ -23,7 +23,8 @@ class HubController {
     @PostMapping("/hubs")
     @ResponseStatus(HttpStatus.CREATED)
     HubResponse createHub(@Valid @RequestBody CreateHubRequest req) {
-        return HubResponse.from(hubs.save(new Hub(req.name(), req.location(), req.capacity())));
+        return HubResponse.from(hubs.save(
+                new Hub(req.name(), req.location(), req.capacity(), req.latitude(), req.longitude())));
     }
 
     @GetMapping("/hubs")

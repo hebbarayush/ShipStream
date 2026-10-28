@@ -22,6 +22,6 @@ Tests (need Docker running — they use Testcontainers): `./mvnw verify`
 - [x] Phase 5 — WebSockets: STOMP over `/ws`, `/topic/shipments/{trackingId}`
 - [x] Phase 6 — caching (Caffeine) + Postgres `LISTEN/NOTIFY` fan-out
 - [x] Phase 7 — background jobs: `job_locks` lease + guarded scheduled jobs
-- [ ] Phase 8 — advanced (ETA, GPS simulator, delayed/lost handling)
+- [x] Phase 8 — advanced: ETA calculation, GPS simulator, `DELAYED`/`LOST`/`CANCELLED` handling
 - [ ] Phase 9 — React frontend (`frontend/`, Vite + TypeScript): shipment list/create/track UI, live via WebSocket
 - [ ] Phase 10 — deployment (frontend + backend)

@@ -19,11 +19,14 @@ Source idea: [Project-idea.md](../Project-idea.md).
 | Multi-instance WS | Postgres `LISTEN/NOTIFY` fan-out (Phase 6) | A location update on instance A reaches sockets on instance B, with no extra infra |
 | Cache | Caffeine, in-process cache-aside with TTL; DB stays source of truth | Fast reads without an extra moving part; acceptable since each instance's cache is just a local accelerator, not shared state |
 | Errors | RFC 7807 `ProblemDetail` via `@RestControllerAdvice` | Consistent API errors |
-| Tests | Unit tests for the state machine; Testcontainers (Postgres/Redis) for integration & concurrency | Correctness is the selling point |
+| Tests | Unit tests for the state machine; Testcontainers (Postgres) for integration & concurrency | Correctness is the selling point |
+| ETA | Direct `routes` row (distance) / assumed speed; no multi-hop path-finding (Phase 8) | Matches the project's explicit non-goal of route optimization; still a believable number |
+| GPS simulation | Scheduled job linearly interpolates origin→destination hub coordinates by elapsed time vs ETA (Phase 8) | Drives the real-time pipeline (outbox → NOTIFY → WS) without needing a real agent/device feed |
+| Delay detection | Scheduled, lease-guarded job moves any shipment past its ETA into `DELAYED` (Phase 8) | Reuses the same `job_locks` coordination as the other background jobs; no new pattern |
 
 Deliberate deviations from the original doc (improvements):
 - `shipment_events` and `outbox_events` are separate: events = permanent audit trail, outbox = transient delivery queue.
-- Added a `sender_hub_id`/`destination_hub_id` pair so routing has something to work with.
+- Added a `current_hub_id`/`destination_hub_id` pair on shipments (Phase 8) so ETA and GPS simulation have something to compute against.
 - Enum columns stored as `VARCHAR` with `CHECK` constraints.
 - Tracking updates are append-only history-light: latest position only (per spec), plus an event for milestones.
 - **Redis dropped entirely.** The original idea doc used it for caching and cross-instance WebSocket
@@ -46,28 +49,38 @@ React SPA ─► REST (Spring MVC) ─► Services ─► PostgreSQL (truth)
 
 ```
 CREATED → PICKED_UP → IN_TRANSIT → ARRIVED_AT_HUB → OUT_FOR_DELIVERY → DELIVERED
-                          ▲              │
-                          └──────────────┘   (hub-to-hub: multi-leg journeys)
+   │          │            │ ▲            │ ▲              │ ▲
+   │          │            └─┴────────────┘ │  (hub-to-hub: multi-leg journeys)
+   │          │            └────── DELAYED ─┴──────────────┘  (ETA passed; resumes wherever it stalled)
+   ▼          ▼            ▼
+CANCELLED   CANCELLED     LOST  (and LOST from ARRIVED_AT_HUB/OUT_FOR_DELIVERY/DELAYED too)
 ```
-Extras (Phase 8): `DELAYED`, `LOST`, `CANCELLED` (only from CREATED/PICKED_UP). Terminal: DELIVERED, LOST, CANCELLED.
+`DELAYED`, `LOST`, `CANCELLED` landed in Phase 8. `CANCELLED` is only reachable before pickup (you can't
+un-ship something already moving); `LOST` is reachable from any in-flight state, as an ops action; `DELAYED`
+is recoverable — the delay-detection job (§6, Phase 8) drops an overdue shipment into it, and normal
+progress out of it resumes the flow. Terminal: `DELIVERED`, `LOST`, `CANCELLED`.
 Every accepted transition writes a `shipment_events` row and an `outbox_events` row in the same transaction.
 
 ## 4. Data model
 Per spec section 5, delivered incrementally by Flyway migrations:
-`V1` hubs, routes, shipments · `V2` shipment_events · `V3` shipment_tracking · `V4` outbox_events · `V5` job_locks.
+`V1` hubs, routes, shipments · `V2` shipment_events · `V3` shipment_tracking · `V4` outbox_events ·
+`V5` job_locks · `V6` hub coordinates, shipment destination hub + ETA, new status values (Phase 8).
 
 ## 5. API surface
 ```
-POST /api/v1/shipments                     create
+POST /api/v1/shipments                     create (originHubId, destinationHubId optional)
 GET  /api/v1/shipments/{id}
 GET  /api/v1/shipments/track/{trackingId}
 POST /api/v1/shipments/{id}/status         transition (idempotency key: future work)   [P2]
 POST /api/v1/tracking/update                                                    [P3]
 GET  /api/v1/tracking/{shipmentId}                                              [P3]
-POST /api/v1/hubs · GET /api/v1/hubs · GET /api/v1/routes                       [P1]
+POST /api/v1/hubs (now takes latitude/longitude) · GET /api/v1/hubs · GET /api/v1/routes  [P1]
 WS   /ws  → /topic/shipments/{trackingId}                                       [P5]
 GET  /api/v1/shipments?status=&page=&size=  paginated list, needed by the UI table  [P9]
 ```
+`ShipmentResponse` now also carries `destinationHubId` and `estimatedDeliveryAt` (Phase 8); the latter is
+set when a shipment enters `IN_TRANSIT` with a direct route to its destination, and cleared on reaching a
+terminal status.
 `GET /api/v1/shipments` (list) doesn't exist yet — it's a Phase 9 prerequisite, added alongside the
 frontend rather than speculatively now. Phase 9 also needs CORS enabled for the dev server origin
 (`http://localhost:5173`) since the SPA and API run on different ports in development.

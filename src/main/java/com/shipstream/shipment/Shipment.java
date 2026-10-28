@@ -34,6 +34,14 @@ public class Shipment {
     @JoinColumn(name = "current_hub_id")
     private Hub currentHub;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "destination_hub_id")
+    private Hub destinationHub;
+
+    /** Set/refreshed whenever the shipment starts moving towards {@link #destinationHub}; see EtaService. */
+    @Column(name = "estimated_delivery_at")
+    private Instant estimatedDeliveryAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -43,11 +51,13 @@ public class Shipment {
     @Version
     private long version;
 
-    public Shipment(String trackingId, String senderAddress, String receiverAddress, Hub originHub) {
+    public Shipment(String trackingId, String senderAddress, String receiverAddress, Hub originHub,
+            Hub destinationHub) {
         this.trackingId = trackingId;
         this.senderAddress = senderAddress;
         this.receiverAddress = receiverAddress;
         this.currentHub = originHub;
+        this.destinationHub = destinationHub;
         this.status = ShipmentStatus.CREATED;
     }
 
@@ -72,5 +82,9 @@ public class Shipment {
 
     public void moveToHub(Hub hub) {
         this.currentHub = hub;
+    }
+
+    public void setEstimatedDeliveryAt(Instant eta) {
+        this.estimatedDeliveryAt = eta;
     }
 }

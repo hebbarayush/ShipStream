@@ -23,9 +23,18 @@ public class Hub {
     @Column(nullable = false)
     private int capacity;
 
-    public Hub(String name, String location, int capacity) {
+    /** Coordinates, used to compute ETAs via routes and to simulate GPS movement between hubs. */
+    @Column(nullable = false)
+    private double latitude;
+
+    @Column(nullable = false)
+    private double longitude;
+
+    public Hub(String name, String location, int capacity, double latitude, double longitude) {
         this.name = name;
         this.location = location;
         this.capacity = capacity;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 }
