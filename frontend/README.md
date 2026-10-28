@@ -1,7 +1,12 @@
 # ShipStream frontend
 
-A minimal React + TypeScript UI over the ShipStream API: a shipments list, a shipment detail/live-tracking
-view, a create-shipment form, and a hubs & routes admin screen.
+A minimal React + TypeScript UI over the ShipStream API, split by audience:
+
+- **Public** (`/`, `/track/:trackingId`) - look up a shipment by tracking ID, no login, same as any
+  courier's tracking page.
+- **Internal ops** (`/app/...`, behind a login) - shipments list, shipment detail/live-tracking,
+  create-shipment form, hubs & routes admin.
+- **`/login`** - demo credentials: `demo` / `demo1234` (see the [root README](../README.md)).
 
 See [`src/styles/theme.css`](src/styles/theme.css) for the whole design system - every page reads from
 the same set of CSS custom properties, so there's one theme, not four.

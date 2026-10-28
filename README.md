@@ -27,6 +27,13 @@ Frontend (needs the backend running first):
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
+### Logging in
+`/` is public — anyone can look up a shipment by tracking ID, no login, same as any courier's tracking
+page. Everything else (`/app/...`) needs an OPS login. A demo one is seeded automatically on backend
+startup: **`demo` / `demo1234`** (override via `DEMO_OPS_USERNAME` / `DEMO_OPS_PASSWORD`). Also set
+`JWT_SECRET` to something real before deploying anywhere beyond local dev — the default in
+`application.properties` is intentionally public and documented as such.
+
 ## Status
 - [x] Phase 1 — core setup: hubs, routes, shipments
 - [x] Phase 2 — state machine: transitions, `shipment_events`, optimistic locking
@@ -37,4 +44,5 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 - [x] Phase 7 — background jobs: `job_locks` lease + guarded scheduled jobs
 - [x] Phase 8 — advanced: ETA calculation, GPS simulator, `DELAYED`/`LOST`/`CANCELLED` handling
 - [x] Phase 9 — React frontend (`frontend/`, Vite + TypeScript): shipment list/create/track UI, live via WebSocket
-- [ ] Phase 10 — deployment (frontend + backend)
+- [x] Phase 10 — auth: public tracking vs. JWT-authenticated ops dashboard (single `OPS` role)
+- [ ] Phase 11 — deployment (frontend + backend)

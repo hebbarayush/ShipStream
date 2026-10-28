@@ -1,12 +1,15 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 const LINKS = [
-  { to: "/", label: "Shipments", end: true },
-  { to: "/shipments/new", label: "New shipment" },
-  { to: "/hubs", label: "Hubs & routes" },
+  { to: "/app", label: "Shipments", end: true },
+  { to: "/app/shipments/new", label: "New shipment" },
+  { to: "/app/hubs", label: "Hubs & routes" },
 ];
 
 export function Layout() {
+  const { user, logout } = useAuth();
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -25,6 +28,10 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <span>{user?.username}</span>
+          <button onClick={logout}>Log out</button>
+        </div>
       </aside>
       <main className="main">
         <Outlet />

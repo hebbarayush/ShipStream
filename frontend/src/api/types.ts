@@ -65,3 +65,8 @@ export interface ApiProblem {
   detail?: string;
   status?: number;
 }
+
+export interface AuthUser {
+  username: string;
+  role: string;
+}

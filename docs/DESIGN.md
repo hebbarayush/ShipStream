@@ -23,6 +23,12 @@ Source idea: [Project-idea.md](../Project-idea.md).
 | ETA | Direct `routes` row (distance) / assumed speed; no multi-hop path-finding (Phase 8) | Matches the project's explicit non-goal of route optimization; still a believable number |
 | GPS simulation | Scheduled job linearly interpolates origin→destination hub coordinates by elapsed time vs ETA (Phase 8) | Drives the real-time pipeline (outbox → NOTIFY → WS) without needing a real agent/device feed |
 | Delay detection | Scheduled, lease-guarded job moves any shipment past its ETA into `DELAYED` (Phase 8) | Reuses the same `job_locks` coordination as the other background jobs; no new pattern |
+| Auth | Stateless JWT in an httpOnly cookie, one `OPS` role, public tracking stays open (Phase 10) | Matches how real carriers split the audience: a customer can track a package with no account, same as FedEx/DHL; everything that can change data needs a login. httpOnly defeats XSS token theft; SameSite=Lax defeats the CSRF risk that comes with cookie-based auth |
+
+Auth deliberately isn't bigger than this: one role, one seeded demo user, no registration flow, no
+password reset. The schema (`users.role`) supports adding `ADMIN`/`DISPATCHER` later without a
+migration, but building that now would be scope without a reason - nothing in the app yet needs more
+than "logged in or not."
 
 Deliberate deviations from the original doc (improvements):
 - `shipment_events` and `outbox_events` are separate: events = permanent audit trail, outbox = transient delivery queue.
@@ -64,24 +70,32 @@ Every accepted transition writes a `shipment_events` row and an `outbox_events` 
 ## 4. Data model
 Per spec section 5, delivered incrementally by Flyway migrations:
 `V1` hubs, routes, shipments · `V2` shipment_events · `V3` shipment_tracking · `V4` outbox_events ·
-`V5` job_locks · `V6` hub coordinates, shipment destination hub + ETA, new status values (Phase 8).
+`V5` job_locks · `V6` hub coordinates, shipment destination hub + ETA, new status values (Phase 8) ·
+`V7` users (Phase 10).
 
 ## 5. API surface
 ```
+PUBLIC (no login)
+GET  /api/v1/shipments/track/{trackingId}                                      [P1]
+GET  /api/v1/tracking/{shipmentId}                                             [P3]
+WS   /ws  → /topic/shipments/{trackingId}                                      [P5]
+POST /api/v1/auth/login                                                        [P10]
+
+OPS LOGIN REQUIRED (everything else)
 POST /api/v1/shipments                     create (originHubId, destinationHubId optional)
 GET  /api/v1/shipments/{id}
-GET  /api/v1/shipments/track/{trackingId}
 POST /api/v1/shipments/{id}/status         transition (idempotency key: future work)   [P2]
 POST /api/v1/tracking/update                                                    [P3]
-GET  /api/v1/tracking/{shipmentId}                                              [P3]
 POST /api/v1/hubs (now takes latitude/longitude) · GET /api/v1/hubs · GET /api/v1/routes  [P1]
-WS   /ws  → /topic/shipments/{trackingId}                                       [P5]
 GET  /api/v1/shipments?status=&page=&size=  paginated list                     [P9]
 GET  /api/v1/shipments/{id}/events          audit trail, used by the detail page [P9]
+GET  /api/v1/auth/me · POST /api/v1/auth/logout                                [P10]
 ```
 `ShipmentResponse` now also carries `destinationHubId` and `estimatedDeliveryAt` (Phase 8); the latter is
 set when a shipment enters `IN_TRANSIT` with a direct route to its destination, and cleared on reaching a
-terminal status. CORS is enabled for `localhost:5173`/`:4173` (Vite dev/preview) in `WebConfig`.
+terminal status. CORS is configured once, as a `CorsConfigurationSource` bean Spring Security's filter
+chain uses directly (`SecurityConfig`) - the earlier `WebConfig`/`WebMvcConfigurer` approach was removed
+in Phase 10, since MVC-level CORS runs too late to matter once the Security filter chain is in front of it.
 
 ## 6. Phases & GitHub milestones
 Each phase = one branch/PR-sized chunk merged to `main` with a tag (`phase-1` …) and README/docs updated.
@@ -97,14 +111,16 @@ Each phase = one branch/PR-sized chunk merged to `main` with a tag (`phase-1` �
 | 7 | `job_locks` + scheduled jobs | Two instances, one runs the job |
 | 8 | ETA, GPS simulator, delayed/lost handling | Simulator drives a shipment end-to-end |
 | 9 | React frontend (see §8) | UI creates a shipment, tracks it by ID, and shows a live status/location update without a page refresh |
-| 10 | Dockerfile, CI (GitHub Actions), deploy (frontend + backend) | Live URL in README |
+| 10 | Auth: public tracking vs. authenticated ops (see §9) | Logged-out requests to write/internal endpoints get 401; the public tracking page needs no login |
+| 11 | Dockerfile, CI (GitHub Actions), deploy (frontend + backend) | Live URL in README |
 
-Frontend before deployment, not after: Phase 10 should ship the complete product, not just the API.
-Building the UI in Phase 9, once the backend feature set (through Phase 8) is settled, avoids
-re-deploying twice and gives Phase 10 one coherent "visit this URL" demo instead of two.
+Frontend before deployment, not after: Phase 11 should ship the complete product, not just the API.
+Building the UI in Phase 9 and locking down who can do what in Phase 10, before deployment, means Phase 11
+puts one coherent, defensible product behind a public URL - not an open API with a UI bolted on that
+anyone could reach and mutate.
 
 ## 7. Resume angle
-Lead with: state machine correctness, outbox + SKIP LOCKED, optimistic-lock concurrency test, WS + Postgres `LISTEN/NOTIFY` fan-out, lease-based job locks, single-datastore design (no Redis). Add a README architecture diagram and load/concurrency test numbers in Phase 8–10.
+Lead with: state machine correctness, outbox + SKIP LOCKED, optimistic-lock concurrency test, WS + Postgres `LISTEN/NOTIFY` fan-out, lease-based job locks, single-datastore design (no Redis), public/authenticated split matching real carrier UX. Add a README architecture diagram and load/concurrency test numbers in Phase 8–11.
 
 ## 8. Phase 9: React frontend
 
@@ -138,3 +154,43 @@ Verified live, not just built: ran the backend + `npm run preview` together, hit
 real HTTP round trip (not mocked), and confirmed the JSON each endpoint returns matches the frontend's
 TypeScript types exactly. Screenshotted all four pages to check the single-theme requirement held up in
 practice, not just in the CSS source.
+
+## 9. Phase 10: Auth - public tracking vs. authenticated ops
+
+The question that forced this phase: deployed with no login, who's the "user" of the shipments list,
+the create form, the hub/route admin? Anyone with the URL - which makes it an open database with a UI
+on it, not an ops tool. Real carriers split the audience in two, and it maps directly onto pages already
+built in Phase 9:
+
+| Audience | Access | Pages |
+|---|---|---|
+| Public (a customer checking a package) | No login, read-only, one lookup | `/`, `/track/:trackingId` |
+| Internal (dispatchers/warehouse staff) | Must log in | everything under `/app` (list, create, transitions, hub/route admin) |
+
+| Concern | Decision | Why |
+|---|---|---|
+| Token | JWT (HS256, `io.jsonwebtoken`/jjwt), `sub`=username, `role` claim, 12h expiry | Stateless - no server-side session table, no extra DB round trip per request to check who's logged in |
+| Transport | httpOnly, `SameSite=Lax` cookie, not a header the frontend attaches itself | Defeats XSS token theft (JS can't read the cookie); Lax defeats the CSRF risk that cookie auth otherwise reintroduces, since the frontend and API are same-site |
+| Password storage | BCrypt (`spring-boot-starter-security`'s `BCryptPasswordEncoder`) | Standard, no reason to roll anything else |
+| Demo access | `DemoUserSeeder` (`ApplicationRunner`) seeds one `demo`/`demo1234` OPS login on startup, idempotently | A live/shared demo needs something to log in with, without anyone running SQL by hand or using real credentials |
+| Error shape | 401/403 from the security filter chain return the same `ProblemDetail` JSON as every other API error (`ProblemDetailAuthHandler`) | Spring Security's default is an empty body; `@ExceptionHandler` can't reach filter-chain exceptions, so this needed its own handler |
+| CORS | Moved from a `WebMvcConfigurer` (`WebConfig`, removed) to a `CorsConfigurationSource` bean the Security filter chain uses directly | MVC-level CORS runs after the Security filter chain; with Security in front, the old approach would silently stop handling preflight requests correctly |
+
+### What's public vs. protected
+See §5. The only three things reachable without a login: shipment lookup by tracking ID, that
+shipment's live position, and the WebSocket topic that pushes its updates - exactly what a courier's
+public tracking page shows, nothing more (no internal hub IDs beyond what `ShipmentResponse` already
+exposes, no audit trail, no admin data).
+
+### Deliberately not built
+One role (`OPS`), not role-depth (`ADMIN` vs `DISPATCHER`) - the `users.role` column exists for that
+later, but nothing in the app today needs the distinction. No registration flow, no password reset,
+no "forgot password" email - this is a demo with one seeded login, not a product with a user base.
+
+### Proof of done
+Verified the full pipeline live, not just unit-tested: confirmed a logged-out request to a protected
+endpoint gets 401, `POST /auth/login` issues a real cookie, that cookie authenticates a subsequent
+request, and the public tracking/live-position endpoints work with no cookie at all - all over real
+HTTP, not mocked security context. Frontend: confirmed via DOM inspection that visiting `/app` logged
+out redirects to `/login` (React Router client-side redirect, not a server one). 40/40 backend tests
+pass, including dedicated tests for the unauthenticated-401 case and the real login round trip.

@@ -1,6 +1,7 @@
 package com.shipstream.shipment;
 
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -12,8 +13,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+/**
+ * Every write and every admin/internal read requires an OPS login (see {@code SecurityConfig}); tests
+ * use {@link SecurityMockMvcRequestPostProcessors#user} to act as one, except
+ * {@link #loginIssuesACookieThatAuthenticatesSubsequentRequests} and
+ * {@link #publicTrackingEndpointsWorkWithoutLogin}, which exercise the real JWT-cookie pipeline and
+ * the public/protected split themselves.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
@@ -21,25 +31,29 @@ class ShipmentApiTest {
 
     @Autowired MockMvc mvc;
 
+    private static MockHttpServletRequestBuilder ops(MockHttpServletRequestBuilder builder) {
+        return builder.with(user("demo").roles("OPS"));
+    }
+
     @Test
     void createsShipmentAndFetchesItByIdAndTrackingId() throws Exception {
         String body = """
                 {"senderAddress":"12 MG Road, Bengaluru","receiverAddress":"5 Park St, Kolkata"}""";
 
-        String location = mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON).content(body))
+        String location = mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.trackingId", startsWith("FT-")))
                 .andReturn().getResponse().getHeader("Location");
 
-        mvc.perform(get(location))
+        mvc.perform(ops(get(location)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.senderAddress").value("12 MG Road, Bengaluru"));
     }
 
     @Test
     void rejectsBlankAddresses() throws Exception {
-        mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"senderAddress\":\"\",\"receiverAddress\":\"x\"}"))
                 .andExpect(status().isBadRequest());
     }
@@ -54,27 +68,27 @@ class ShipmentApiTest {
         long idA = createHub("BLR-1", "Bengaluru", 500, 12.97, 77.59);
         long idB = createHub("CCU-1", "Kolkata", 400, 22.57, 88.36);
 
-        mvc.perform(post("/api/v1/routes").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/routes")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":1870}".formatted(idA, idB)))
                 .andExpect(status().isCreated());
-        mvc.perform(get("/api/v1/routes")).andExpect(status().isOk()).andExpect(jsonPath("$[0].distanceKm").value(1870));
+        mvc.perform(ops(get("/api/v1/routes"))).andExpect(status().isOk()).andExpect(jsonPath("$[0].distanceKm").value(1870));
     }
 
     @Test
     void transitionsThroughValidStatusesAndRejectsSkippingStages() throws Exception {
         Long id = createShipment();
 
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"IN_TRANSIT\"}"))
                 .andExpect(status().isConflict()); // CREATED -> IN_TRANSIT skips PICKED_UP
 
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PICKED_UP"))
                 .andExpect(jsonPath("$.version").value(1));
 
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"IN_TRANSIT\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("IN_TRANSIT"));
@@ -83,13 +97,13 @@ class ShipmentApiTest {
     @Test
     void concurrentTransitionsOnSameShipmentLeaveOneLoserWithAConflict() throws Exception {
         Long id = createShipment();
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk());
 
         // Both requests race to move the same (version=1) shipment forward; exactly one must win.
         java.util.concurrent.Callable<Integer> attempt = () -> mvc.perform(
-                        post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"status\":\"IN_TRANSIT\"}"))
                 .andReturn().getResponse().getStatus();
 
@@ -113,15 +127,16 @@ class ShipmentApiTest {
 
         mvc.perform(get("/api/v1/tracking/" + id)).andExpect(status().isNotFound());
 
-        mvc.perform(post("/api/v1/tracking/update").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/tracking/update")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"shipmentId\":%d,\"latitude\":12.97,\"longitude\":77.59}".formatted(id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.latitude").value(12.97));
 
-        mvc.perform(post("/api/v1/tracking/update").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/tracking/update")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"shipmentId\":%d,\"latitude\":22.57,\"longitude\":88.36}".formatted(id)))
                 .andExpect(status().isOk());
 
+        // Live position is public, same as the tracking-by-ID page: no auth here.
         mvc.perform(get("/api/v1/tracking/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.latitude").value(22.57))
@@ -131,19 +146,19 @@ class ShipmentApiTest {
     @Test
     void cancellationIsAllowedBeforePickupButNotAfter() throws Exception {
         Long id = createShipment();
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"CANCELLED\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
 
         Long id2 = createShipment();
-        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id2 + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id2 + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"IN_TRANSIT\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/v1/shipments/" + id2 + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id2 + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"CANCELLED\"}"))
                 .andExpect(status().isConflict());
     }
@@ -152,23 +167,23 @@ class ShipmentApiTest {
     void etaIsComputedOnceInTransitWithADirectRoute() throws Exception {
         long origin = createHub("ORG-1", "Origin City", 500, 12.97, 77.59);
         long dest = createHub("DST-1", "Dest City", 500, 22.57, 88.36);
-        mvc.perform(post("/api/v1/routes").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/routes")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":100}".formatted(origin, dest)))
                 .andExpect(status().isCreated());
 
         String body = """
                 {"senderAddress":"A","receiverAddress":"B","originHubId":%d,"destinationHubId":%d}
                 """.formatted(origin, dest);
-        String response = mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON).content(body))
+        String response = mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estimatedDeliveryAt").doesNotExist())
                 .andReturn().getResponse().getContentAsString();
         long id = Long.parseLong(response.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"IN_TRANSIT\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estimatedDeliveryAt").exists());
@@ -177,16 +192,16 @@ class ShipmentApiTest {
     @Test
     void listsShipmentsPagedAndFiltersByStatus() throws Exception {
         Long id = createShipment();
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk());
 
-        mvc.perform(get("/api/v1/shipments?page=0&size=5"))
+        mvc.perform(ops(get("/api/v1/shipments?page=0&size=5")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.size").value(5));
 
-        mvc.perform(get("/api/v1/shipments?status=PICKED_UP"))
+        mvc.perform(ops(get("/api/v1/shipments?status=PICKED_UP")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(id))
                 .andExpect(jsonPath("$.items[0].status").value("PICKED_UP"));
@@ -195,19 +210,66 @@ class ShipmentApiTest {
     @Test
     void returnsTheAuditTrailForAShipment() throws Exception {
         Long id = createShipment();
-        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(ops(post("/api/v1/shipments/" + id + "/status")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"PICKED_UP\"}"))
                 .andExpect(status().isOk());
 
-        mvc.perform(get("/api/v1/shipments/" + id + "/events"))
+        mvc.perform(ops(get("/api/v1/shipments/" + id + "/events")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].eventType").value("SHIPMENT_CREATED"))
                 .andExpect(jsonPath("$[1].eventType").value("STATUS_CHANGED"))
                 .andExpect(jsonPath("$[1].payload.to").value("PICKED_UP"));
     }
 
+    @Test
+    void writesAndInternalReadsAreRejectedWithoutLogin() throws Exception {
+        mvc.perform(get("/api/v1/shipments")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"senderAddress\":\"A\",\"receiverAddress\":\"B\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"X\",\"location\":\"Y\",\"capacity\":10,\"latitude\":0,\"longitude\":0}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void publicTrackingEndpointsWorkWithoutLogin() throws Exception {
+        Long id = createShipment();
+        String trackingId = mvc.perform(ops(get("/api/v1/shipments/" + id)))
+                .andReturn().getResponse().getContentAsString()
+                .replaceAll(".*\"trackingId\":\"([^\"]+)\".*", "$1");
+
+        mvc.perform(get("/api/v1/shipments/track/" + trackingId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.trackingId").value(trackingId));
+
+        mvc.perform(get("/api/v1/tracking/" + id)).andExpect(status().isNotFound()); // public, just no data yet
+    }
+
+    @Test
+    void loginIssuesACookieThatAuthenticatesSubsequentRequests() throws Exception {
+        var loginResult = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"demo\",\"password\":\"demo1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("demo"))
+                .andExpect(jsonPath("$.role").value("OPS"))
+                .andReturn();
+        var cookie = loginResult.getResponse().getCookie("shipstream_token");
+        org.assertj.core.api.Assertions.assertThat(cookie).isNotNull();
+
+        mvc.perform(get("/api/v1/auth/me").cookie(cookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("demo"));
+
+        mvc.perform(get("/api/v1/shipments").cookie(cookie)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"demo\",\"password\":\"wrong\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private long createHub(String name, String location, int capacity, double lat, double lon) throws Exception {
-        String response = mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
+        String response = mvc.perform(ops(post("/api/v1/hubs")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"%s\",\"location\":\"%s\",\"capacity\":%d,\"latitude\":%s,\"longitude\":%s}"
                                 .formatted(name, location, capacity, lat, lon)))
                 .andExpect(status().isCreated())
@@ -218,7 +280,7 @@ class ShipmentApiTest {
     private Long createShipment() throws Exception {
         String body = """
                 {"senderAddress":"12 MG Road, Bengaluru","receiverAddress":"5 Park St, Kolkata"}""";
-        String response = mvc.perform(post("/api/v1/shipments").contentType(MediaType.APPLICATION_JSON).content(body))
+        String response = mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return Long.parseLong(response.replaceAll(".*\"id\":(\\d+).*", "$1"));

@@ -24,7 +24,7 @@ export function CreateShipmentPage() {
       }),
     onSuccess: (shipment) => {
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
-      navigate(`/shipments/${shipment.id}`);
+      navigate(`/app/shipments/${shipment.id}`);
     },
   });
 

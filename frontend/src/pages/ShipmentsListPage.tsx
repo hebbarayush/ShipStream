@@ -37,7 +37,7 @@ export function ShipmentsListPage() {
           <h1>Shipments</h1>
           <p className="subtitle">Everything moving through the network right now.</p>
         </div>
-        <Link to="/shipments/new" className="btn btn-primary">
+        <Link to="/app/shipments/new" className="btn btn-primary">
           New shipment
         </Link>
       </div>
@@ -86,7 +86,7 @@ export function ShipmentsListPage() {
               {query.data.items.map((s) => (
                 <tr key={s.id}>
                   <td>
-                    <Link to={`/shipments/${s.id}`} className="mono">
+                    <Link to={`/app/shipments/${s.id}`} className="mono">
                       {s.trackingId}
                     </Link>
                   </td>

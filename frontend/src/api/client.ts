@@ -1,5 +1,6 @@
 import type {
   ApiProblem,
+  AuthUser,
   Hub,
   Page,
   Route,
@@ -22,6 +23,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
+    credentials: "include", // the OPS session is a cookie, not a header we attach ourselves
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
@@ -39,6 +41,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Auth
+  login: (username: string, password: string) =>
+    request<AuthUser>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  logout: () => request<void>("/api/v1/auth/logout", { method: "POST" }),
+  me: () => request<AuthUser>("/api/v1/auth/me"),
+
+  // Shipments - everything except track-by-ID requires login
   listShipments: (params: { status?: ShipmentStatus; page?: number; size?: number }) => {
     const qs = new URLSearchParams();
     if (params.status) qs.set("status", params.status);
@@ -69,6 +78,7 @@ export const api = {
   createRoute: (body: { sourceHubId: number; destinationHubId: number; distanceKm: number }) =>
     request<Route>("/api/v1/routes", { method: "POST", body: JSON.stringify(body) }),
 
+  // Public - no login needed, same as a real carrier's tracking page
   getTracking: (shipmentId: number) => request<Tracking>(`/api/v1/tracking/${shipmentId}`),
 };
 
