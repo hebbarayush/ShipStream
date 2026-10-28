@@ -47,6 +47,23 @@ public class ShipmentService {
         return shipment;
     }
 
+    /**
+     * Same as {@link #create}, but with a caller-supplied tracking ID instead of a generated one, and
+     * idempotent (returns the existing row rather than erroring if that ID is already seeded). Exists
+     * only for {@code DemoDataSeeder}: real shipments always get a system-generated ID.
+     */
+    @Transactional
+    public Shipment createSeedShipment(String fixedTrackingId, ShipmentDtos.CreateShipmentRequest req) {
+        return shipments.findByTrackingId(fixedTrackingId).orElseGet(() -> {
+            Hub origin = hub(req.originHubId());
+            Hub destination = hub(req.destinationHubId());
+            Shipment shipment = shipments.save(
+                    new Shipment(fixedTrackingId, req.senderAddress(), req.receiverAddress(), origin, destination));
+            recordEvent(shipment, "SHIPMENT_CREATED", Map.of("status", shipment.getStatus()));
+            return shipment;
+        });
+    }
+
     @Cacheable(value = "shipments", key = "#id")
     @Transactional(readOnly = true)
     public Shipment get(Long id) {

@@ -478,3 +478,24 @@ tbody tr:last-child td {
   color: var(--n-0);
   text-decoration: underline;
 }
+
+.hint-box {
+  background: var(--n-50);
+  border: 1px dashed var(--n-300);
+  border-radius: var(--radius);
+  padding: var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--n-600);
+}
+.hint-box strong {
+  color: var(--n-800);
+}
+.hint-box button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-600);
+  cursor: pointer;
+  text-decoration: underline;
+}

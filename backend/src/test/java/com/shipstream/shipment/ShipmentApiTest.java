@@ -71,7 +71,10 @@ class ShipmentApiTest {
         mvc.perform(ops(post("/api/v1/routes")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":1870}".formatted(idA, idB)))
                 .andExpect(status().isCreated());
-        mvc.perform(ops(get("/api/v1/routes"))).andExpect(status().isOk()).andExpect(jsonPath("$[0].distanceKm").value(1870));
+        // Not $[0]: the demo seeder (DemoDataSeeder) also creates a route on startup.
+        mvc.perform(ops(get("/api/v1/routes"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sourceHubId == %d && @.destinationHubId == %d)].distanceKm".formatted(idA, idB))
+                        .value(1870));
     }
 
     @Test

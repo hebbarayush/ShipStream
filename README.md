@@ -27,11 +27,17 @@ Frontend (needs the backend running first):
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-### Logging in
+### Demo data
 `/` is public — anyone can look up a shipment by tracking ID, no login, same as any courier's tracking
-page. Everything else (`/app/...`) needs an OPS login. A demo one is seeded automatically on backend
-startup: **`demo` / `demo1234`** (override via `DEMO_OPS_USERNAME` / `DEMO_OPS_PASSWORD`). Also set
-`JWT_SECRET` to something real before deploying anywhere beyond local dev — the default in
+page. Everything else (`/app/...`) needs an OPS login. Both are seeded automatically on backend startup
+(`DemoUserSeeder`, `DemoDataSeeder`) and shown right on the login/tracking pages, not just here:
+
+- **Ops login:** `demo` / `demo1234` (override via `DEMO_OPS_USERNAME` / `DEMO_OPS_PASSWORD`)
+- **Demo tracking ID:** `FT-DEMO00001` — seeded `IN_TRANSIT` with a live ETA and a moving position, and
+  self-healing: if it ever drifts into `DELAYED` from sitting unattended, the next backend restart
+  resumes it with a fresh ETA
+
+Set `JWT_SECRET` to something real before deploying anywhere beyond local dev — the default in
 `application.properties` is intentionally public and documented as such.
 
 ## Status

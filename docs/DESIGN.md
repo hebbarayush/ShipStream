@@ -172,7 +172,7 @@ built in Phase 9:
 | Token | JWT (HS256, `io.jsonwebtoken`/jjwt), `sub`=username, `role` claim, 12h expiry | Stateless - no server-side session table, no extra DB round trip per request to check who's logged in |
 | Transport | httpOnly, `SameSite=Lax` cookie, not a header the frontend attaches itself | Defeats XSS token theft (JS can't read the cookie); Lax defeats the CSRF risk that cookie auth otherwise reintroduces, since the frontend and API are same-site |
 | Password storage | BCrypt (`spring-boot-starter-security`'s `BCryptPasswordEncoder`) | Standard, no reason to roll anything else |
-| Demo access | `DemoUserSeeder` (`ApplicationRunner`) seeds one `demo`/`demo1234` OPS login on startup, idempotently | A live/shared demo needs something to log in with, without anyone running SQL by hand or using real credentials |
+| Demo access | `DemoUserSeeder` seeds `demo`/`demo1234` (OPS); `DemoDataSeeder` seeds a shipment at a fixed tracking ID (`FT-DEMO00001`), both idempotent `ApplicationRunner`s, both shown directly on the login/tracking pages | A live/shared demo needs something to log in with *and* something to track, without anyone running SQL by hand, using real credentials, or hunting through a README to find them |
 | Error shape | 401/403 from the security filter chain return the same `ProblemDetail` JSON as every other API error (`ProblemDetailAuthHandler`) | Spring Security's default is an empty body; `@ExceptionHandler` can't reach filter-chain exceptions, so this needed its own handler |
 | CORS | Moved from a `WebMvcConfigurer` (`WebConfig`, removed) to a `CorsConfigurationSource` bean the Security filter chain uses directly | MVC-level CORS runs after the Security filter chain; with Security in front, the old approach would silently stop handling preflight requests correctly |
 
@@ -194,3 +194,8 @@ request, and the public tracking/live-position endpoints work with no cookie at 
 HTTP, not mocked security context. Frontend: confirmed via DOM inspection that visiting `/app` logged
 out redirects to `/login` (React Router client-side redirect, not a server one). 40/40 backend tests
 pass, including dedicated tests for the unauthenticated-401 case and the real login round trip.
+
+`DemoDataSeeder` (same phase, demo-usability follow-up): confirmed the seeded shipment reaches
+`IN_TRANSIT` with a real ETA on first boot, confirmed restart idempotency (same row, same ID, no
+duplicate, no re-seed log line), and confirmed the API responses it produces match exactly what the
+frontend's hardcoded `FT-DEMO00001` constant expects.

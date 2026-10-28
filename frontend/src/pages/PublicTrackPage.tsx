@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+
+// Seeded by the backend on startup (DemoDataSeeder) - always IN_TRANSIT, so there's a live ETA and a
+// moving position to look at without needing to create a shipment first.
+const DEMO_TRACKING_ID = "FT-DEMO00001";
 import { api, ApiError } from "../api/client";
 import { StatusBadge } from "../components/StatusBadge";
 import { Loading } from "../components/RequestState";
@@ -41,6 +45,15 @@ export function PublicTrackPage() {
             Track
           </button>
         </form>
+
+        {!trackingId && (
+          <div className="hint-box" style={{ marginBottom: "var(--sp-6)" }}>
+            No tracking ID handy? Try the demo shipment:{" "}
+            <button type="button" className="link" onClick={() => navigate(`/track/${DEMO_TRACKING_ID}`)}>
+              {DEMO_TRACKING_ID}
+            </button>
+          </div>
+        )}
 
         {trackingId && <TrackingResult trackingId={trackingId} />}
 

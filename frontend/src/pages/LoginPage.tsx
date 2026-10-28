@@ -32,6 +32,21 @@ export function LoginPage() {
           Internal access only. Looking to track a package? <a href="/">Go back</a>.
         </p>
 
+        <div className="hint-box" style={{ marginBottom: "var(--sp-6)" }}>
+          Demo access: <strong className="mono">demo</strong> / <strong className="mono">demo1234</strong>
+          <button
+            type="button"
+            className="link"
+            style={{ marginLeft: "var(--sp-2)" }}
+            onClick={() => {
+              setUsername("demo");
+              setPassword("demo1234");
+            }}
+          >
+            fill in
+          </button>
+        </div>
+
         {loginError ? <ErrorBanner error={loginError} /> : null}
 
         <form onSubmit={handleSubmit}>
