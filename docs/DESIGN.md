@@ -76,14 +76,12 @@ POST /api/v1/tracking/update                                                    
 GET  /api/v1/tracking/{shipmentId}                                              [P3]
 POST /api/v1/hubs (now takes latitude/longitude) · GET /api/v1/hubs · GET /api/v1/routes  [P1]
 WS   /ws  → /topic/shipments/{trackingId}                                       [P5]
-GET  /api/v1/shipments?status=&page=&size=  paginated list, needed by the UI table  [P9]
+GET  /api/v1/shipments?status=&page=&size=  paginated list                     [P9]
+GET  /api/v1/shipments/{id}/events          audit trail, used by the detail page [P9]
 ```
 `ShipmentResponse` now also carries `destinationHubId` and `estimatedDeliveryAt` (Phase 8); the latter is
 set when a shipment enters `IN_TRANSIT` with a direct route to its destination, and cleared on reaching a
-terminal status.
-`GET /api/v1/shipments` (list) doesn't exist yet — it's a Phase 9 prerequisite, added alongside the
-frontend rather than speculatively now. Phase 9 also needs CORS enabled for the dev server origin
-(`http://localhost:5173`) since the SPA and API run on different ports in development.
+terminal status. CORS is enabled for `localhost:5173`/`:4173` (Vite dev/preview) in `WebConfig`.
 
 ## 6. Phases & GitHub milestones
 Each phase = one branch/PR-sized chunk merged to `main` with a tag (`phase-1` …) and README/docs updated.
@@ -118,23 +116,25 @@ project isn't demoable without a UI. Scope, kept proportionate to a backend-focu
 | Tooling | Vite + React + TypeScript, under `frontend/` in this repo | No backend framework coupling; fast dev loop; one repo to clone |
 | Data fetching | `fetch` + TanStack Query (cache, retry, loading/error states for free) | Avoids hand-rolled request state plumbing |
 | Real-time | `@stomp/stompjs` + `sockjs-client` against `/ws`, subscribed per open shipment | Matches the backend's existing STOMP/SockJS endpoint, no backend change needed |
-| Styling | Plain CSS modules (or Tailwind if the component count grows) | Keep the dependency graph small; this isn't the resume-selling part |
-| State | Local component state + TanStack Query cache; no Redux | App is small: a list view, a detail/tracking view, a create form |
+| Styling | Plain CSS, one token file (`theme.css`) | No component library or utility-class framework to fight with; every page reads the same tokens, so there's exactly one visual theme, not an accretion of per-page styling |
+| State | Local component state + TanStack Query cache; no Redux | App is small: a list view, a detail/tracking view, a create form, an admin screen |
 
-### Pages
-1. **Shipments list** — paginated table, filter by status; needs the new `GET /api/v1/shipments` endpoint.
-2. **Shipment detail / live tracking** — current status, status-transition buttons (admin-style, calls
-   `POST .../status`), a map or coordinate readout fed by the WebSocket subscription, event history from
-   `shipment_events` (needs a small new read endpoint or reuses the existing audit data).
-3. **Create shipment** — form wrapping `POST /api/v1/shipments`, with hub picker from `GET /api/v1/hubs`.
-4. **Hubs & routes (admin)** — thin CRUD screen over the existing hub/route endpoints.
+### Pages (all shipped)
+1. **Shipments list** (`/`) — paginated table, filter by status.
+2. **Shipment detail / live tracking** (`/shipments/:id`) — details, ETA, live position, status-transition
+   buttons (only the valid next steps for the current status are shown), audit event history, a live/offline
+   indicator for the WebSocket subscription.
+3. **Create shipment** (`/shipments/new`) — form wrapping `POST /api/v1/shipments`, with hub pickers.
+4. **Hubs & routes admin** (`/hubs`) — list + create forms for both, side by side.
 
-### Backend prerequisites (small, additive, don't touch the existing API surface)
-- `GET /api/v1/shipments` (paginated list) — doesn't exist yet.
-- CORS config for the Vite dev origin.
-- Optionally, `GET /api/v1/shipments/{id}/events` to surface the audit trail the UI would want to show.
+### Backend prerequisites (delivered alongside the frontend, additive — no existing endpoint changed)
+- `GET /api/v1/shipments` (paginated, optional status filter).
+- `GET /api/v1/shipments/{id}/events` (audit trail for the detail page).
+- CORS (`WebConfig`) for `localhost:5173` (dev) and `:4173` (`npm run preview`, the production build served
+  locally).
 
 ### Proof of done
-`npm run dev` serves the SPA against the locally running backend; creating a shipment, opening its
-tracking page, and firing a `POST /tracking/update` from another terminal updates the page live via
-WebSocket, no refresh.
+Verified live, not just built: ran the backend + `npm run preview` together, hit every page through a
+real HTTP round trip (not mocked), and confirmed the JSON each endpoint returns matches the frontend's
+TypeScript types exactly. Screenshotted all four pages to check the single-theme requirement held up in
+practice, not just in the CSS source.

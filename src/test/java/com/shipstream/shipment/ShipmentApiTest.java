@@ -174,6 +174,38 @@ class ShipmentApiTest {
                 .andExpect(jsonPath("$.estimatedDeliveryAt").exists());
     }
 
+    @Test
+    void listsShipmentsPagedAndFiltersByStatus() throws Exception {
+        Long id = createShipment();
+        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PICKED_UP\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/shipments?page=0&size=5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.size").value(5));
+
+        mvc.perform(get("/api/v1/shipments?status=PICKED_UP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(id))
+                .andExpect(jsonPath("$.items[0].status").value("PICKED_UP"));
+    }
+
+    @Test
+    void returnsTheAuditTrailForAShipment() throws Exception {
+        Long id = createShipment();
+        mvc.perform(post("/api/v1/shipments/" + id + "/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PICKED_UP\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/shipments/" + id + "/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].eventType").value("SHIPMENT_CREATED"))
+                .andExpect(jsonPath("$[1].eventType").value("STATUS_CHANGED"))
+                .andExpect(jsonPath("$[1].payload.to").value("PICKED_UP"));
+    }
+
     private long createHub(String name, String location, int capacity, double lat, double lon) throws Exception {
         String response = mvc.perform(post("/api/v1/hubs").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"%s\",\"location\":\"%s\",\"capacity\":%d,\"latitude\":%s,\"longitude\":%s}"

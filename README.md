@@ -5,7 +5,8 @@ Focus: state machines, concurrency safety, transactional outbox, live updates, m
 Single datastore by design: no Redis — local (Caffeine) caching and Postgres `LISTEN/NOTIFY` cover what
 Redis would have done for caching and cross-instance WebSocket fan-out.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and phased roadmap.
+See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and phased roadmap, and
+[frontend/README.md](frontend/README.md) for the UI.
 
 ## Run locally
 ```bash
@@ -13,6 +14,11 @@ docker compose up -d        # Postgres :5433
 ./mvnw spring-boot:run
 ```
 Tests (need Docker running — they use Testcontainers): `./mvnw verify`
+
+Frontend (needs the backend running first):
+```bash
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
 
 ## Status
 - [x] Phase 1 — core setup: hubs, routes, shipments
@@ -23,5 +29,5 @@ Tests (need Docker running — they use Testcontainers): `./mvnw verify`
 - [x] Phase 6 — caching (Caffeine) + Postgres `LISTEN/NOTIFY` fan-out
 - [x] Phase 7 — background jobs: `job_locks` lease + guarded scheduled jobs
 - [x] Phase 8 — advanced: ETA calculation, GPS simulator, `DELAYED`/`LOST`/`CANCELLED` handling
-- [ ] Phase 9 — React frontend (`frontend/`, Vite + TypeScript): shipment list/create/track UI, live via WebSocket
+- [x] Phase 9 — React frontend (`frontend/`, Vite + TypeScript): shipment list/create/track UI, live via WebSocket
 - [ ] Phase 10 — deployment (frontend + backend)
