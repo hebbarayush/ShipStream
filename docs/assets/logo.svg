@@ -1,0 +1,10 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="28" fill="#1a1611"/>
+  <!-- Dashed route arc behind the pin, suggesting the live-tracked path -->
+  <path d="M22 96 C 40 70, 46 56, 64 50" fill="none" stroke="#403a32" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 9"/>
+  <!-- Location pin: the shipment's current, live position -->
+  <g transform="translate(21,16) scale(3.6)">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#b5541e"/>
+    <circle cx="12" cy="9" r="2.6" fill="#f7f6f4"/>
+  </g>
+</svg>

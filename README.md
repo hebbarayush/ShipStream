@@ -1,62 +1,273 @@
-# ShipStream
+<p align="center">
+  <img src="docs/assets/logo.svg" width="96" height="96" alt="ShipStream logo" />
+</p>
 
-Real-time logistics & shipment tracking backend — Spring Boot, PostgreSQL, WebSockets.
-Focus: state machines, concurrency safety, transactional outbox, live updates, multi-instance job coordination.
-Single datastore by design: no Redis — local (Caffeine) caching and Postgres `LISTEN/NOTIFY` cover what
-Redis would have done for caching and cross-instance WebSocket fan-out.
+<h1 align="center">ShipStream</h1>
+<p align="center"><b>Real-time logistics & shipment tracking</b> — Spring Boot, PostgreSQL, WebSockets, React</p>
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and phased roadmap, and
-[frontend/README.md](frontend/README.md) for the UI.
+<p align="center">
+  <img alt="CI" src="https://github.com/hebbarayush/ShipStream/actions/workflows/ci.yml/badge.svg" />
+  <img alt="Java" src="https://img.shields.io/badge/Java-21-orange" />
+  <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen" />
+  <img alt="React" src="https://img.shields.io/badge/React-18-blue" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey" />
+</p>
 
-## Structure
+Built as a portfolio project to demonstrate production-grade backend design: a state machine that
+makes invalid shipment transitions impossible, optimistic-lock concurrency safety, a transactional
+**outbox** feeding real-time WebSocket pushes, lease-based distributed job coordination, and a
+public/authenticated split modeled on how real carriers actually split their audience — a customer
+tracks a package with no account, same as FedEx or DHL; everything that changes data needs a login.
+Single datastore throughout (PostgreSQL only — no Redis): Caffeine covers caching, Postgres
+`LISTEN/NOTIFY` covers cross-instance WebSocket fan-out.
+
+---
+
+## Table of contents
+
+- [What it does](#what-it-does)
+- [Screens](#screens)
+- [Tech stack](#tech-stack)
+- [Architecture](#architecture)
+- [Notable engineering](#notable-engineering)
+- [Data model](#data-model)
+- [API overview](#api-overview)
+- [Running locally](#running-locally)
+- [Testing & CI](#testing--ci)
+- [Project structure](#project-structure)
+- [Deployment](#deployment)
+- [Roadmap](#roadmap)
+- [License](#license)
+
+---
+
+## What it does
+
+| Audience | Access | Can do |
+|---|---|---|
+| **Public** — a customer checking a package | No account | Look up a shipment by tracking ID; see its live status, ETA and position |
+| **Ops** — dispatchers/warehouse staff | JWT login (one seeded demo user) | Create shipments, advance them through the state machine, manage hubs & routes, see the full audit trail |
+
+Core mechanics, beyond CRUD:
+
+- **State machine** — `CREATED → PICKED_UP → IN_TRANSIT ⇄ ARRIVED_AT_HUB → OUT_FOR_DELIVERY → DELIVERED`,
+  plus `DELAYED` (recoverable — resumes wherever it stalled), `LOST` and `CANCELLED` (terminal). Every
+  transition is validated through one entry point; an invalid one is structurally impossible to reach,
+  not just rejected by a check.
+- **Concurrency safety** — `@Version` optimistic locking on shipments: two concurrent transitions race
+  on the update, and the loser gets a clean `409`, not a corrupted row. Covered by a real concurrent-
+  threads integration test, not a mock.
+- **Transactional outbox** — a business change and its `outbox_events` row commit in the same
+  transaction (no dual-write problem); a poller claims batches with `SELECT ... FOR UPDATE SKIP LOCKED`,
+  so multiple instances can drain the queue without double-processing, and fans each event out via
+  Postgres `NOTIFY` to every instance's locally-connected WebSocket clients.
+- **ETA + live GPS simulation** — a scheduled job linearly interpolates a shipment's position between
+  its origin and destination hub by elapsed time vs. ETA, driving the real-time pipeline with a
+  believable feed instead of needing a real device.
+- **Lease-based job coordination** — a `job_locks` table with a lease (`locked_until`) ensures a
+  scheduled job (delay detection, stale-data cleanup) runs on exactly one instance at a time, even with
+  several instances running the same `@Scheduled` method.
+- **Auth** — stateless JWT in an httpOnly, `SameSite=Lax` cookie. One `OPS` role; the schema supports
+  more without a migration, but nothing in the app needs that yet.
+
+---
+
+## Screens
+
+| Public tracking | Ops login |
+|---|---|
+| ![Public tracking](docs/screenshots/public-tracking.png) | ![Ops login](docs/screenshots/ops-login.png) |
+
+Run locally (see [below](#running-locally)) and either track the seeded demo shipment
+**`FT-DEMO00001`** with no login, or sign in as **`demo`** / **`demo1234`** for the full ops dashboard —
+shipment list, create, status transitions, hub/route admin, live tracking, audit history.
+
+---
+
+## Tech stack
+
+| Layer | Choices |
+|---|---|
+| **Backend** | Java 21, Spring Boot 4.1 (Web, Data JPA, Security, Validation, Cache, WebSocket), Hibernate 7 |
+| **Database** | PostgreSQL 16, owned entirely by Flyway migrations (`ddl-auto=validate`) |
+| **Auth** | Stateless JWT (`jjwt`), BCrypt, httpOnly cookie |
+| **Real-time** | Spring WebSocket + STOMP, Postgres `LISTEN/NOTIFY` for cross-instance fan-out |
+| **Caching** | Caffeine, in-process cache-aside |
+| **Frontend** | React 18 + TypeScript, Vite, React Router, TanStack Query, `@stomp/stompjs`; plain CSS (one design-token file, no component library) |
+| **CI / packaging** | GitHub Actions (`mvn verify` + `npm run build`, both also building their container image); multi-stage, non-root Dockerfiles for both apps |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["React + Vite SPA"] -- "REST / JSON<br/>JWT cookie" --> API["Spring Boot API<br/>:8080 (stateless)"]
+    UI -- "STOMP / WebSocket" --> API
+    API -- "JPA / Hibernate" --> PG[("PostgreSQL")]
+    API -- "Flyway migrations" --> PG
+
+    subgraph API_internals [" "]
+      direction TB
+      SVC["ShipmentService<br/>(state machine, single entry point)"] -- "same tx" --> OUT[("outbox_events")]
+      WK["OutboxProcessor<br/>SKIP LOCKED poller"] -- "drain" --> OUT
+      WK -- "pg_notify" --> NOTIFY["LISTEN/NOTIFY"]
+      NOTIFY -- "fan out" --> WS["WebSocket broadcaster"]
+      JOBS["Scheduled jobs<br/>(ETA/delay, GPS sim, cleanup)"] -- "lease" --> LOCKS[("job_locks")]
+    end
 ```
-backend/    Spring Boot API (Java 21, Maven) - Dockerfile included
-frontend/   React + TypeScript UI (Vite) - Dockerfile + nginx.conf included
-docs/       Design doc and roadmap
-.github/    CI (build + test both on every push)
+
+**Request path:** `Controller` (thin) → `Service` (business logic, the state machine, auth-relevant
+checks) → `Repository`. Every response is a DTO record, never a raw entity.
+
+---
+
+## Notable engineering
+
+### Transactional outbox, not a message broker bolted on
+
+Side effects never fire from inside the transaction that caused them. A shipment transition writes its
+`shipment_events` audit row *and* an `outbox_events` row in the same transaction — so "the transition
+happened" and "a broadcast is owed" commit together atomically, or not at all. A separate
+`OutboxProcessor` claims batches every 2s with `FOR UPDATE SKIP LOCKED` (several instances can poll
+without double-processing), publishes via `pg_notify`, and every instance's `PgNotifyListener` forwards
+to its own locally-connected WebSocket clients — the mechanism that would normally need Redis pub/sub,
+built on Postgres alone.
+
+### The state machine is the only way to change status
+
+`ShipmentStatus.canTransitionTo()` is a transition table, not a scattered set of `if` checks, and
+`Shipment.transitionTo()` is the *only* method that mutates status — there's no code path that can set
+an invalid one. Covered by exhaustive parameterized tests over every status pair.
+
+### Optimistic locking, proven under real concurrency
+
+`@Version` on `shipments`; a dedicated test fires two concurrent transition requests at the same
+shipment from two threads and asserts exactly one succeeds (`200`) and the other gets a `409` —
+against a real Postgres via Testcontainers, not a mock.
+
+### Auth that matches how carriers actually work
+
+A stranger can track a package with zero login friction; everything that mutates data sits behind a
+JWT-in-httpOnly-cookie login. `SameSite=Lax` defeats the CSRF risk that cookie-based auth otherwise
+reintroduces. A demo login and a demo shipment are both seeded on startup, idempotently, and shown
+directly on the login/tracking pages — not just in this README.
+
+---
+
+## Data model
+
+Seven Flyway migrations, delivered incrementally: `V1` hubs/routes/shipments · `V2` shipment_events
+(audit trail) · `V3` shipment_tracking (live position) · `V4` outbox_events · `V5` job_locks ·
+`V6` hub coordinates + ETA + extra statuses · `V7` users.
+
+Full design rationale, every decision and why, phase by phase: [docs/DESIGN.md](docs/DESIGN.md).
+
+---
+
+## API overview
+
+```
+PUBLIC (no login)
+GET  /api/v1/shipments/track/{trackingId}
+GET  /api/v1/tracking/{shipmentId}
+WS   /ws  → /topic/shipments/{trackingId}
+POST /api/v1/auth/login
+
+OPS LOGIN REQUIRED
+POST /api/v1/shipments · GET /api/v1/shipments?status=&page=&size= · GET /api/v1/shipments/{id}
+POST /api/v1/shipments/{id}/status          state machine transition
+GET  /api/v1/shipments/{id}/events          audit trail
+POST /api/v1/tracking/update
+POST /api/v1/hubs · GET /api/v1/hubs · GET /api/v1/routes
+GET  /api/v1/auth/me · POST /api/v1/auth/logout
 ```
 
-## Run locally
+---
+
+## Running locally
+
 ```bash
 docker compose up -d                  # Postgres :5433, from the repo root
-cd backend && ./mvnw spring-boot:run
+cd backend && ./mvnw spring-boot:run  # :8080 — must run from backend/, not the repo root
 ```
-Tests (need Docker running — they use Testcontainers): `cd backend && ./mvnw verify`
-
-Frontend (needs the backend running first):
 ```bash
-cd frontend && npm install && npm run dev   # http://localhost:5173
+cd frontend && npm install && npm run dev   # :5173
 ```
 
-### Demo data
-`/` is public — anyone can look up a shipment by tracking ID, no login, same as any courier's tracking
-page. Everything else (`/app/...`) needs an OPS login. Both are seeded automatically on backend startup
-(`DemoUserSeeder`, `DemoDataSeeder`) and shown right on the login/tracking pages, not just here:
+Demo credentials (seeded automatically, shown on-screen): ops login **`demo`** / **`demo1234`**, demo
+tracking ID **`FT-DEMO00001`**. See [`backend/.env.example`](backend/.env.example) and
+[`frontend/.env.example`](frontend/.env.example) for every configurable variable.
 
-- **Ops login:** `demo` / `demo1234` (override via `DEMO_OPS_USERNAME` / `DEMO_OPS_PASSWORD`)
-- **Demo tracking ID:** `FT-DEMO00001` — seeded `IN_TRANSIT` with a live ETA and a moving position, and
-  self-healing: if it ever drifts into `DELAYED` from sitting unattended, the next backend restart
-  resumes it with a fresh ETA
+---
 
-Set `JWT_SECRET` to something real before deploying anywhere beyond local dev — the default in
-`application.properties` is intentionally public and documented as such.
+## Testing & CI
 
-## Deploying
-Both apps have a production Dockerfile (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf` for
-SPA routing) - built and run-tested locally, not just written. See `.env.example` in each for every
-variable a deployment needs, in particular `CORS_ALLOWED_ORIGINS` (backend, must list the deployed
-frontend's real origin) and `VITE_API_URL` (frontend, a Docker *build* arg - Vite bakes it into the
-static bundle, there's no server at runtime to read it from).
+```bash
+cd backend  && ./mvnw verify    # 40 tests — real Postgres via Testcontainers
+cd frontend && npm run build    # tsc typecheck + Vite build
+```
 
-## Status
-- [x] Phase 1 — core setup: hubs, routes, shipments
-- [x] Phase 2 — state machine: transitions, `shipment_events`, optimistic locking
-- [x] Phase 3 — tracking: `/tracking/update`, `/tracking/{shipmentId}`
-- [x] Phase 4 — transactional outbox, `SKIP LOCKED` polling
-- [x] Phase 5 — WebSockets: STOMP over `/ws`, `/topic/shipments/{trackingId}`
-- [x] Phase 6 — caching (Caffeine) + Postgres `LISTEN/NOTIFY` fan-out
-- [x] Phase 7 — background jobs: `job_locks` lease + guarded scheduled jobs
-- [x] Phase 8 — advanced: ETA calculation, GPS simulator, `DELAYED`/`LOST`/`CANCELLED` handling
-- [x] Phase 9 — React frontend (`frontend/`, Vite + TypeScript): shipment list/create/track UI, live via WebSocket
-- [x] Phase 10 — auth: public tracking vs. JWT-authenticated ops dashboard (single `OPS` role)
-- [ ] Phase 11 — deployment (frontend + backend)
+Backend tests cover the state machine exhaustively, a real concurrent-threads optimistic-lock race, the
+outbox/notify pipeline, tracking, ETA, the full auth pipeline (unauthenticated `401`, a real login round
+trip, the public/protected split), and the REST API end to end. `GitHub Actions` runs both jobs — plus a
+container image build for each — on every push and PR.
+
+---
+
+## Project structure
+
+```
+backend/
+  src/main/java/com/shipstream/
+    shipment/    state machine, ShipmentService (single entry point), controllers, DTOs
+    hub/         hubs & routes
+    tracking/    live position, GpsSimulator
+    outbox/      OutboxEvent, OutboxProcessor (SKIP LOCKED)
+    realtime/    WebSocket config, Postgres LISTEN/NOTIFY publisher + listener
+    jobs/        JobLock, JobLockService, ScheduledJobs (delay detection, cleanup)
+    auth/        JWT, SecurityConfig, DemoUserSeeder
+    demo/        DemoDataSeeder (seeds the public demo shipment)
+    common/      shared exceptions, ProblemDetail error handling, cache config
+  src/main/resources/db/migration/   V1..V7
+  Dockerfile     multi-stage: Maven build → JRE-alpine runtime, non-root
+frontend/
+  src/
+    pages/       one per screen (public tracking, login, shipments list/detail/create, hubs)
+    hooks/       useAuth, useShipmentSocket (STOMP)
+    components/  Layout, RequireAuth, ErrorBoundary, shared UI
+    styles/      theme.css — the entire design system, one file
+  Dockerfile     multi-stage: Vite build → nginx (SPA fallback)
+docker-compose.yml       Postgres for local dev
+.github/workflows/       CI
+docs/DESIGN.md           full design rationale, phase by phase
+```
+
+---
+
+## Deployment
+
+Both apps are container-ready (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf` for SPA
+routing) — built and run-tested locally, not just written. Set `CORS_ALLOWED_ORIGINS` (backend) to the
+deployed frontend's real origin and `VITE_API_URL` (frontend, a Docker *build* arg — Vite bakes it into
+the static bundle) to the deployed backend's URL; see the `.env.example` files for the full list.
+
+---
+
+## Roadmap
+
+- [x] Phases 1–10: core CRUD → state machine → tracking → outbox → WebSockets → caching/fan-out →
+      background jobs → ETA/GPS simulation → React frontend → auth
+- [ ] Phase 11 — stand up the live deployment (Render)
+
+Full phase-by-phase history: [docs/DESIGN.md](docs/DESIGN.md).
+
+---
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+_Built by Ayush Hebbar. Portfolio project._
