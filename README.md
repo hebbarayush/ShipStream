@@ -74,9 +74,13 @@ Core mechanics, beyond CRUD:
 
 ## Screens
 
-| Public tracking | Ops login |
+| Ops dashboard — shipments list | Public tracking — live result |
 |---|---|
-| ![Public tracking](docs/screenshots/public-tracking.png) | ![Ops login](docs/screenshots/ops-login.png) |
+| ![Shipments list](docs/screenshots/shipments-list.png) | ![Tracking result](docs/screenshots/tracking-result.png) |
+
+| Create shipment |
+|---|
+| ![New shipment](docs/screenshots/new-shipment.png) |
 
 Run locally (see [below](#running-locally)) and either track the seeded demo shipment
 **`FT-DEMO00001`** with no login, or sign in as **`demo`** / **`demo1234`** for the full ops dashboard —
