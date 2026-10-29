@@ -47,7 +47,7 @@ class ScheduledJobs {
     void cleanupStaleTracking() {
         runWithLock("cleanup-stale-tracking", Duration.ofMinutes(2), () -> {
             Instant cutoff = Instant.now().minus(Duration.ofHours(1));
-            long removed = tracking.deleteByLastUpdatedBefore(cutoff);
+            int removed = tracking.deleteStaleForFinishedShipments(cutoff);
             if (removed > 0) {
                 log.info("Removed {} stale tracking row(s)", removed);
             }

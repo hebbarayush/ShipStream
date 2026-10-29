@@ -10,9 +10,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and phased roadmap, an
 
 ## Structure
 ```
-backend/    Spring Boot API (Java 21, Maven)
-frontend/   React + TypeScript UI (Vite)
+backend/    Spring Boot API (Java 21, Maven) - Dockerfile included
+frontend/   React + TypeScript UI (Vite) - Dockerfile + nginx.conf included
 docs/       Design doc and roadmap
+.github/    CI (build + test both on every push)
 ```
 
 ## Run locally
@@ -39,6 +40,13 @@ page. Everything else (`/app/...`) needs an OPS login. Both are seeded automatic
 
 Set `JWT_SECRET` to something real before deploying anywhere beyond local dev — the default in
 `application.properties` is intentionally public and documented as such.
+
+## Deploying
+Both apps have a production Dockerfile (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf` for
+SPA routing) - built and run-tested locally, not just written. See `.env.example` in each for every
+variable a deployment needs, in particular `CORS_ALLOWED_ORIGINS` (backend, must list the deployed
+frontend's real origin) and `VITE_API_URL` (frontend, a Docker *build* arg - Vite bakes it into the
+static bundle, there's no server at runtime to read it from).
 
 ## Status
 - [x] Phase 1 — core setup: hubs, routes, shipments

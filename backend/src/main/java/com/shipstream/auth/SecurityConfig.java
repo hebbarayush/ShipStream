@@ -1,6 +1,7 @@
 package com.shipstream.auth;
 
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,10 +27,13 @@ class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final ProblemDetailAuthHandler problemDetailHandler;
+    private final List<String> allowedOrigins;
 
-    SecurityConfig(JwtAuthenticationFilter jwtFilter, ProblemDetailAuthHandler problemDetailHandler) {
+    SecurityConfig(JwtAuthenticationFilter jwtFilter, ProblemDetailAuthHandler problemDetailHandler,
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.problemDetailHandler = problemDetailHandler;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -64,8 +68,9 @@ class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // 5173 = `npm run dev`, 4173 = `npm run preview` (serves the production build locally)
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:4173"));
+        // Defaults (application.properties) cover local dev (5173 = `npm run dev`, 4173 = `npm run
+        // preview`); set CORS_ALLOWED_ORIGINS (comma-separated) to the deployed frontend's origin(s).
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true); // the JWT travels as a cookie, not a header

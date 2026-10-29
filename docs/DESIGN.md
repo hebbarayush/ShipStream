@@ -119,6 +119,36 @@ Building the UI in Phase 9 and locking down who can do what in Phase 10, before 
 puts one coherent, defensible product behind a public URL - not an open API with a UI bolted on that
 anyone could reach and mutate.
 
+**Pre-deployment audit** (before actually standing up a live URL, target: Render): checked what existed
+against what a deployment needs, not just re-read the roadmap.
+
+- **CORS/cookies were hardcoded to `localhost`** (`SecurityConfig`) - a real blocker, not polish: any
+  deployed frontend would've had every request rejected. Fixed: `CORS_ALLOWED_ORIGINS` (comma-separated)
+  and the datasource URL now also builds from `PGHOST`/`PGPORT`/`PGDATABASE` if `DB_URL` isn't set
+  directly, so a platform that injects Postgres by individual field (Render's `fromDatabase`) doesn't
+  need anyone hand-assembling a JDBC URL.
+- **Dockerfiles** (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`), both multi-stage,
+  non-root runtime user, built and run-tested locally (not just written): confirmed the backend image
+  connects to Postgres and passes its health check, confirmed the frontend image's nginx serves both
+  the root path and a deep client-side route (`/track/FT-DEMO00001`) with 200, not a bare 404.
+- **CI** (`.github/workflows/ci.yml`): backend `mvn verify` (Testcontainers, needs Docker - GitHub-hosted
+  runners have it preinstalled) and frontend typecheck+build, both building their container image too.
+- **React `ErrorBoundary`**: there wasn't one. An uncaught render error would've white-screened with
+  nothing recoverable on screen - exactly the failure mode that made two earlier bugs this project
+  confusing to diagnose from the outside.
+- **`.env.example`** in both `backend/` and `frontend/`, documenting every variable a deployment needs.
+- **`LICENSE`** (MIT) at the repo root.
+- Found and fixed a real, live race along the way (not deployment-related, just caught by actually
+  running the built backend image against Postgres instead of assuming it'd work): `cleanupStaleTracking`
+  deleted `shipment_tracking` rows purely by age, including for shipments still `IN_TRANSIT` - if the
+  app was offline long enough, the cleanup job and `GpsSimulator` could race on the same row (Hibernate's
+  `StaleStateException`, already caught and self-healing next tick, but noisy and avoidable). Scoped the
+  delete to shipments in a terminal status instead; an active shipment's tracking row is never "stale"
+  just because nobody was writing to it.
+- Deliberately not done now: actually creating the Render services and getting a live URL. That's
+  Render-account-specific work only the project owner can do; everything above is what makes doing it
+  mechanical rather than full of surprises once they do.
+
 ## 7. Resume angle
 Lead with: state machine correctness, outbox + SKIP LOCKED, optimistic-lock concurrency test, WS + Postgres `LISTEN/NOTIFY` fan-out, lease-based job locks, single-datastore design (no Redis), public/authenticated split matching real carrier UX. Add a README architecture diagram and load/concurrency test numbers in Phase 8–11.
 
