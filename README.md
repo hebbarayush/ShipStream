@@ -13,13 +13,12 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey" />
 </p>
 
-Built as a portfolio project to demonstrate production-grade backend design: a state machine that
-makes invalid shipment transitions impossible, optimistic-lock concurrency safety, a transactional
-**outbox** feeding real-time WebSocket pushes, lease-based distributed job coordination, and a
-public/authenticated split modeled on how real carriers actually split their audience — a customer
-tracks a package with no account, same as FedEx or DHL; everything that changes data needs a login.
-Single datastore throughout (PostgreSQL only — no Redis): Caffeine covers caching, Postgres
-`LISTEN/NOTIFY` covers cross-instance WebSocket fan-out.
+A shipment tracking system with a state machine that makes invalid transitions impossible,
+optimistic-lock concurrency safety, a transactional **outbox** feeding real-time WebSocket pushes,
+lease-based distributed job coordination, and a public/authenticated split modeled on how real carriers
+actually split their audience — a customer tracks a package with no account, same as FedEx or DHL;
+everything that changes data needs a login. Single datastore throughout (PostgreSQL only — no Redis):
+Caffeine covers caching, Postgres `LISTEN/NOTIFY` covers cross-instance WebSocket fan-out.
 
 ---
 
@@ -274,4 +273,4 @@ Full phase-by-phase history: [docs/DESIGN.md](docs/DESIGN.md).
 
 ---
 
-_Built by Ayush Hebbar. Portfolio project._
+_Built by Ayush Hebbar._
