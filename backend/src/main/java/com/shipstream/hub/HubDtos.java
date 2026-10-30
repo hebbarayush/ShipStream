@@ -1,5 +1,7 @@
 package com.shipstream.hub;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,8 +13,8 @@ public final class HubDtos {
             @NotBlank String name,
             @NotBlank String location,
             @Min(1) int capacity,
-            @NotNull Double latitude,
-            @NotNull Double longitude) {}
+            @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
+            @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude) {}
 
     public record HubResponse(Long id, String name, String location, int capacity, double latitude, double longitude) {
         static HubResponse from(Hub h) {
