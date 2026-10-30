@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { ShipmentStatus } from "../api/types";
 import { StatusBadge } from "../components/StatusBadge";
@@ -26,6 +26,7 @@ export function ShipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const shipmentId = Number(id);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const shipmentQuery = useQuery({
     queryKey: ["shipment", shipmentId],
@@ -58,6 +59,14 @@ export function ShipmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["shipment", shipmentId] });
       queryClient.invalidateQueries({ queryKey: ["shipment-events", shipmentId] });
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
+    },
+  });
+
+  const deleteShipment = useMutation({
+    mutationFn: () => api.deleteShipment(shipmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+      navigate("/app");
     },
   });
 
@@ -106,7 +115,7 @@ export function ShipmentDetailPage() {
           </div>
 
           {NEXT_STEPS[shipment.status].length > 0 && (
-            <div className="card">
+            <div className="card" style={{ marginBottom: "var(--sp-6)" }}>
               <h2 style={{ marginBottom: "var(--sp-4)" }}>Advance status</h2>
               <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
                 {NEXT_STEPS[shipment.status].map((next) => (
@@ -122,6 +131,26 @@ export function ShipmentDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="card">
+            <h2 style={{ marginBottom: "var(--sp-2)" }}>Admin cleanup</h2>
+            <p className="subtitle" style={{ marginBottom: "var(--sp-4)" }}>
+              Deletes the record outright - a real shipment should be <strong>cancelled</strong>, not
+              deleted. This is for clearing out test data.
+            </p>
+            {deleteShipment.isError && <ErrorBanner error={deleteShipment.error} />}
+            <button
+              className="btn btn-danger"
+              disabled={deleteShipment.isPending}
+              onClick={() => {
+                if (confirm(`Permanently delete shipment ${shipment.trackingId}? This can't be undone.`)) {
+                  deleteShipment.mutate();
+                }
+              }}
+            >
+              {deleteShipment.isPending ? "Deleting…" : "Delete shipment"}
+            </button>
+          </div>
         </section>
 
         <section>

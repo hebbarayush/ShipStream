@@ -183,6 +183,7 @@ OPS LOGIN REQUIRED
 POST /api/v1/shipments · GET /api/v1/shipments?status=&page=&size= · GET /api/v1/shipments/{id}
 POST /api/v1/shipments/{id}/status          state machine transition
 GET  /api/v1/shipments/{id}/events          audit trail
+DELETE /api/v1/shipments/{id}               admin cleanup, not "cancel" - erases the record outright
 POST /api/v1/tracking/update
 POST /api/v1/hubs · GET /api/v1/hubs · DELETE /api/v1/hubs/{id}
 POST /api/v1/routes · GET /api/v1/routes · DELETE /api/v1/routes/{id}

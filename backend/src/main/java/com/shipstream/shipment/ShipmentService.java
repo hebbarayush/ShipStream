@@ -4,6 +4,7 @@ import com.shipstream.common.NotFoundException;
 import com.shipstream.hub.Hub;
 import com.shipstream.hub.HubRepository;
 import com.shipstream.outbox.OutboxWriter;
+import com.shipstream.tracking.ShipmentTrackingRepository;
 import java.util.List;
 import java.util.Map;
 import org.springframework.cache.annotation.CacheEvict;
@@ -20,16 +21,19 @@ public class ShipmentService {
     private final ShipmentRepository shipments;
     private final HubRepository hubs;
     private final ShipmentEventRepository events;
+    private final ShipmentTrackingRepository tracking;
     private final OutboxWriter outbox;
     private final TrackingIdGenerator idGenerator;
     private final EtaService eta;
     private final ObjectMapper objectMapper;
 
     ShipmentService(ShipmentRepository shipments, HubRepository hubs, ShipmentEventRepository events,
-            OutboxWriter outbox, TrackingIdGenerator idGenerator, EtaService eta, ObjectMapper objectMapper) {
+            ShipmentTrackingRepository tracking, OutboxWriter outbox, TrackingIdGenerator idGenerator,
+            EtaService eta, ObjectMapper objectMapper) {
         this.shipments = shipments;
         this.hubs = hubs;
         this.events = events;
+        this.tracking = tracking;
         this.outbox = outbox;
         this.idGenerator = idGenerator;
         this.eta = eta;
@@ -85,6 +89,22 @@ public class ShipmentService {
     public List<ShipmentEvent> events(Long shipmentId) {
         get(shipmentId); // 404s if the shipment doesn't exist, rather than returning an empty list
         return events.findByShipmentIdOrderByIdAsc(shipmentId);
+    }
+
+    /**
+     * Admin cleanup, not a domain operation: a real carrier never hard-deletes a shipment record, it
+     * cancels one ({@link ShipmentStatus#CANCELLED}) and keeps the history. This exists purely so test/
+     * demo clutter - a hub stuck because some throwaway shipment still references it, say - can
+     * actually be cleared out from the ops UI, hence why it lives behind the same OPS-login-only
+     * surface as everything else rather than being exposed as a "cancel" alternative.
+     */
+    @CacheEvict(value = "shipments", key = "#id")
+    @Transactional
+    public void deleteShipment(Long id) {
+        get(id); // 404s if it doesn't exist
+        tracking.deleteByShipmentId(id);
+        events.deleteByShipmentId(id);
+        shipments.deleteById(id);
     }
 
     /**

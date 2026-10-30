@@ -70,6 +70,10 @@ export const api = {
       body: JSON.stringify({ status, hubId }),
     }),
   getEvents: (id: number) => request<ShipmentEvent[]>(`/api/v1/shipments/${id}/events`),
+  // Admin cleanup, not a normal shipment action - a real carrier cancels a shipment, it doesn't erase
+  // the record. Exists so test/demo clutter (e.g. a hub stuck because a throwaway shipment still
+  // references it) can actually be cleared out.
+  deleteShipment: (id: number) => request<void>(`/api/v1/shipments/${id}`, { method: "DELETE" }),
 
   listHubs: () => request<Hub[]>("/api/v1/hubs"),
   createHub: (body: { name: string; location: string; capacity: number; latitude: number; longitude: number }) =>

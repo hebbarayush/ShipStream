@@ -24,4 +24,7 @@ public interface ShipmentTrackingRepository extends JpaRepository<ShipmentTracki
               AND s.status IN ('DELIVERED', 'LOST', 'CANCELLED')
             """, nativeQuery = true)
     int deleteStaleForFinishedShipments(Instant cutoff);
+
+    /** Used when deleting a shipment outright: its live-position row goes with it. */
+    long deleteByShipmentId(Long shipmentId);
 }

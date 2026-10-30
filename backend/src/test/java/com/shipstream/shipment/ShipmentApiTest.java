@@ -107,9 +107,17 @@ class ShipmentApiTest {
         // A hub a shipment is currently sitting at: the FK blocks it, surfaced as a clean 409, not a
         // silently orphaned shipment.
         String body = "{\"senderAddress\":\"A\",\"receiverAddress\":\"B\",\"originHubId\":%d}".formatted(idA);
-        mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isCreated());
+        String shipmentResponse = mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long shipmentId = Long.parseLong(shipmentResponse.replaceAll(".*\"id\":(\\d+).*", "$1"));
         mvc.perform(ops(delete("/api/v1/hubs/" + idA))).andExpect(status().isConflict());
+
+        // Deleting the shipment itself (admin cleanup, not a normal action) un-blocks the hub it was
+        // sitting at - proving the delete actually clears the FK, not just the shipment's own row.
+        mvc.perform(ops(delete("/api/v1/shipments/" + shipmentId))).andExpect(status().isNoContent());
+        mvc.perform(ops(get("/api/v1/shipments/" + shipmentId))).andExpect(status().isNotFound());
+        mvc.perform(ops(delete("/api/v1/hubs/" + idA))).andExpect(status().isNoContent());
     }
 
     @Test

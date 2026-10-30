@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tools.jackson.databind.ObjectMapper;
@@ -62,5 +63,12 @@ class ShipmentController {
         return service.events(id).stream()
                 .map(e -> ShipmentEventResponse.from(e, objectMapper.readValue(e.getPayload(), Map.class)))
                 .toList();
+    }
+
+    /** Admin cleanup - see {@code ShipmentService.deleteShipment}. */
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(@PathVariable Long id) {
+        service.deleteShipment(id);
     }
 }
