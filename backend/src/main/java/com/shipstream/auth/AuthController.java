@@ -20,13 +20,22 @@ class AuthController {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final boolean cookieSecure;
+    private final String cookieSameSite;
 
     AuthController(UserRepository users, PasswordEncoder encoder, JwtService jwt,
-            @Value("${app.security.cookie-secure:false}") boolean cookieSecure) {
+            @Value("${app.security.cookie-secure:false}") boolean cookieSecure,
+            // Lax is correct (and safer) when frontend and backend share a registrable domain, e.g.
+            // local dev (both localhost) or same-domain production. It breaks the moment they're on
+            // genuinely different domains (e.g. a Vercel frontend + a Render backend): Lax cookies
+            // aren't sent on cross-site fetch/XHR at all, so login would silently never attach the
+            // cookie. None (which *requires* Secure=true - browsers reject None without it) is what
+            // that split-domain topology needs instead.
+            @Value("${app.security.cookie-same-site:Lax}") String cookieSameSite) {
         this.users = users;
         this.encoder = encoder;
         this.jwt = jwt;
         this.cookieSecure = cookieSecure;
+        this.cookieSameSite = cookieSameSite;
     }
 
     @PostMapping("/login")
@@ -60,7 +69,7 @@ class AuthController {
         return ResponseCookie.from(JwtService.COOKIE_NAME, value)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite("Lax")
+                .sameSite(cookieSameSite)
                 .path("/")
                 .maxAge(maxAgeSeconds)
                 .build();

@@ -250,10 +250,18 @@ docs/DESIGN.md           full design rationale, phase by phase
 
 ## Deployment
 
+**Target stack: Render (backend) + Supabase (Postgres) + Vercel (frontend).**
+
 Both apps are container-ready (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf` for SPA
-routing) — built and run-tested locally, not just written. Set `CORS_ALLOWED_ORIGINS` (backend) to the
-deployed frontend's real origin and `VITE_API_URL` (frontend, a Docker *build* arg — Vite bakes it into
-the static bundle) to the deployed backend's URL; see the `.env.example` files for the full list.
+routing, `frontend/vercel.json` for Vercel's own SPA rewrite) — built and run-tested locally, not just
+written. Set `CORS_ALLOWED_ORIGINS` (backend) to the deployed frontend's real origin and `VITE_API_URL`
+(frontend, baked into the static bundle at build time) to the deployed backend's URL; see the
+`.env.example` files for the full list.
+
+**Frontend and backend on different domains needs one extra setting.** `SameSite=Lax` (the local-dev
+default) only works because `localhost` frontend and backend share a registrable domain. A Vercel
+frontend and a Render backend don't — set `COOKIE_SAME_SITE=None` (and keep `COOKIE_SECURE=true`,
+required alongside `None`) or the login cookie silently never attaches to cross-site API calls.
 
 ---
 

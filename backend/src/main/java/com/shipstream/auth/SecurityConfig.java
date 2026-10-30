@@ -45,9 +45,13 @@ class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // Stateless JWT-in-cookie API, not a browser form session: nothing here accepts a
-                // state-changing GET, and the cookie is SameSite=Lax, which blocks it being sent on a
-                // cross-site POST in the first place - the usual reason CSRF protection exists.
+                // What actually prevents CSRF here doesn't depend on SameSite (which is configurable -
+                // see AuthController - and becomes None, not Lax, once frontend and backend are on
+                // different domains): every state-changing request is JSON (Content-Type:
+                // application/json), which isn't a CORS "simple" header, so the browser always sends a
+                // preflight first; CorsConfigurationSource only allows the exact configured origin(s),
+                // never "*". An attacker's site simply can't get a credentialed request past that
+                // preflight to begin with, regardless of SameSite.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
