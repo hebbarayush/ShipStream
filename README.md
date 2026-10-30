@@ -13,6 +13,8 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey" />
 </p>
 
+<p align="center"><b><a href="https://shipstreamapp.vercel.app">Live demo →</a></b></p>
+
 A shipment tracking system with a state machine that makes invalid transitions impossible,
 optimistic-lock concurrency safety, a transactional **outbox** feeding real-time WebSocket pushes,
 lease-based distributed job coordination, and a public/authenticated split modeled on how real carriers
@@ -182,7 +184,8 @@ POST /api/v1/shipments · GET /api/v1/shipments?status=&page=&size= · GET /api/
 POST /api/v1/shipments/{id}/status          state machine transition
 GET  /api/v1/shipments/{id}/events          audit trail
 POST /api/v1/tracking/update
-POST /api/v1/hubs · GET /api/v1/hubs · GET /api/v1/routes
+POST /api/v1/hubs · GET /api/v1/hubs · DELETE /api/v1/hubs/{id}
+POST /api/v1/routes · GET /api/v1/routes · DELETE /api/v1/routes/{id}
 GET  /api/v1/auth/me · POST /api/v1/auth/logout
 ```
 
@@ -250,13 +253,13 @@ docs/DESIGN.md           full design rationale, phase by phase
 
 ## Deployment
 
-**Target stack: Render (backend) + Supabase (Postgres) + Vercel (frontend).**
+**Live: Render (backend) + Supabase (Postgres) + Vercel (frontend).**
 
 Both apps are container-ready (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf` for SPA
-routing, `frontend/vercel.json` for Vercel's own SPA rewrite) — built and run-tested locally, not just
-written. Set `CORS_ALLOWED_ORIGINS` (backend) to the deployed frontend's real origin and `VITE_API_URL`
-(frontend, baked into the static bundle at build time) to the deployed backend's URL; see the
-`.env.example` files for the full list.
+routing, `frontend/vercel.json` for Vercel's own SPA rewrite) — built and run-tested locally before ever
+reaching production. `CORS_ALLOWED_ORIGINS` (backend) is set to the deployed frontend's real origin and
+`VITE_API_URL` (frontend, baked into the static bundle at build time) to the deployed backend's URL; see
+the `.env.example` files for the full list of what a redeploy elsewhere would need.
 
 **Frontend and backend on different domains needs one extra setting.** `SameSite=Lax` (the local-dev
 default) only works because `localhost` frontend and backend share a registrable domain. A Vercel
@@ -269,7 +272,8 @@ required alongside `None`) or the login cookie silently never attaches to cross-
 
 - [x] Phases 1–10: core CRUD → state machine → tracking → outbox → WebSockets → caching/fan-out →
       background jobs → ETA/GPS simulation → React frontend → auth
-- [ ] Phase 11 — stand up the live deployment (Render)
+- [x] Phase 11 — live: [shipstreamapp.vercel.app](https://shipstreamapp.vercel.app) (Vercel) +
+      Render (API) + Supabase (Postgres)
 
 Full phase-by-phase history: [docs/DESIGN.md](docs/DESIGN.md).
 

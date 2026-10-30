@@ -12,4 +12,7 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
 
     /** Direct route only - no multi-hop path-finding (deliberately out of scope, see Project-idea.md). */
     Optional<Route> findBySourceHubIdAndDestinationHubId(Long sourceHubId, Long destinationHubId);
+
+    /** Used when deleting a hub: its routes (either direction) have to go first, or the FK blocks it. */
+    long deleteBySourceHubIdOrDestinationHubId(Long sourceHubId, Long destinationHubId);
 }

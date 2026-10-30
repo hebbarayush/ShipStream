@@ -74,9 +74,13 @@ export const api = {
   listHubs: () => request<Hub[]>("/api/v1/hubs"),
   createHub: (body: { name: string; location: string; capacity: number; latitude: number; longitude: number }) =>
     request<Hub>("/api/v1/hubs", { method: "POST", body: JSON.stringify(body) }),
+  // Deletes the hub's own routes first (either direction); fails with 409 if a shipment still
+  // references the hub - that's the backend refusing to orphan a shipment, not a bug to work around.
+  deleteHub: (id: number) => request<void>(`/api/v1/hubs/${id}`, { method: "DELETE" }),
   listRoutes: () => request<Route[]>("/api/v1/routes"),
   createRoute: (body: { sourceHubId: number; destinationHubId: number; distanceKm: number }) =>
     request<Route>("/api/v1/routes", { method: "POST", body: JSON.stringify(body) }),
+  deleteRoute: (id: number) => request<void>(`/api/v1/routes/${id}`, { method: "DELETE" }),
 
   // Public - no login needed, same as a real carrier's tracking page
   getTracking: (shipmentId: number) => request<Tracking>(`/api/v1/tracking/${shipmentId}`),

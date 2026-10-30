@@ -2,6 +2,7 @@ package com.shipstream.shipment;
 
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -75,6 +76,40 @@ class ShipmentApiTest {
         mvc.perform(ops(get("/api/v1/routes"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.sourceHubId == %d && @.destinationHubId == %d)].distanceKm".formatted(idA, idB))
                         .value(1870));
+    }
+
+    @Test
+    void routeCanBeDeleted() throws Exception {
+        long idA = createHub("DEL-SRC", "Nowhere", 10, 1.0, 1.0);
+        long idB = createHub("DEL-DST", "Nowhere Else", 10, 2.0, 2.0);
+        String response = mvc.perform(ops(post("/api/v1/routes")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":10}".formatted(idA, idB)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long routeId = Long.parseLong(response.replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mvc.perform(ops(delete("/api/v1/routes/" + routeId))).andExpect(status().isNoContent());
+        mvc.perform(ops(delete("/api/v1/routes/" + routeId))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deletingAHubDeletesItsRoutesButNotIfAShipmentStillReferencesIt() throws Exception {
+        long idA = createHub("DEL-HUB-A", "Nowhere", 10, 1.0, 1.0);
+        long idB = createHub("DEL-HUB-B", "Nowhere Else", 10, 2.0, 2.0);
+        mvc.perform(ops(post("/api/v1/routes")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sourceHubId\":%d,\"destinationHubId\":%d,\"distanceKm\":10}".formatted(idA, idB)))
+                .andExpect(status().isCreated());
+
+        // A hub with no shipment on it: deleting it takes its route along, cleanly.
+        mvc.perform(ops(delete("/api/v1/hubs/" + idB))).andExpect(status().isNoContent());
+        mvc.perform(ops(get("/api/v1/routes"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.sourceHubId == %d)]", idB).isEmpty());
+
+        // A hub a shipment is currently sitting at: the FK blocks it, surfaced as a clean 409, not a
+        // silently orphaned shipment.
+        String body = "{\"senderAddress\":\"A\",\"receiverAddress\":\"B\",\"originHubId\":%d}".formatted(idA);
+        mvc.perform(ops(post("/api/v1/shipments")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+        mvc.perform(ops(delete("/api/v1/hubs/" + idA))).andExpect(status().isConflict());
     }
 
     @Test

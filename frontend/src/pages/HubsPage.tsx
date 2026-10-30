@@ -11,6 +11,19 @@ export function HubsPage() {
   const hubs = hubsQuery.data ?? [];
   const hubName = (id: number) => hubs.find((h) => h.id === id)?.name ?? `#${id}`;
 
+  const deleteHub = useMutation({
+    mutationFn: (id: number) => api.deleteHub(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hubs"] });
+      queryClient.invalidateQueries({ queryKey: ["routes"] }); // the hub's own routes went with it
+    },
+  });
+
+  const deleteRoute = useMutation({
+    mutationFn: (id: number) => api.deleteRoute(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["routes"] }),
+  });
+
   const [hubForm, setHubForm] = useState({ name: "", location: "", capacity: "", latitude: "", longitude: "" });
   const createHub = useMutation({
     mutationFn: () =>
@@ -55,6 +68,7 @@ export function HubsPage() {
           <h2 style={{ marginBottom: "var(--sp-3)" }}>Hubs</h2>
           {hubsQuery.isLoading && <Loading />}
           {hubsQuery.isError && <ErrorBanner error={hubsQuery.error} />}
+          {deleteHub.isError && <ErrorBanner error={deleteHub.error} />}
           {hubs.length === 0 && !hubsQuery.isLoading ? (
             <EmptyState>No hubs yet.</EmptyState>
           ) : (
@@ -65,6 +79,7 @@ export function HubsPage() {
                     <th>Name</th>
                     <th>Location</th>
                     <th>Capacity</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -73,6 +88,19 @@ export function HubsPage() {
                       <td>{h.name}</td>
                       <td>{h.location}</td>
                       <td>{h.capacity}</td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          disabled={deleteHub.isPending}
+                          onClick={() => {
+                            if (confirm(`Delete hub "${h.name}"? Its routes go with it.`)) {
+                              deleteHub.mutate(h.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -157,6 +185,7 @@ export function HubsPage() {
           <h2 style={{ marginBottom: "var(--sp-3)" }}>Routes</h2>
           {routesQuery.isLoading && <Loading />}
           {routesQuery.isError && <ErrorBanner error={routesQuery.error} />}
+          {deleteRoute.isError && <ErrorBanner error={deleteRoute.error} />}
           {(routesQuery.data ?? []).length === 0 && !routesQuery.isLoading ? (
             <EmptyState>No routes yet.</EmptyState>
           ) : (
@@ -167,6 +196,7 @@ export function HubsPage() {
                     <th>From</th>
                     <th>To</th>
                     <th>Distance</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -175,6 +205,15 @@ export function HubsPage() {
                       <td>{hubName(r.sourceHubId)}</td>
                       <td>{hubName(r.destinationHubId)}</td>
                       <td>{r.distanceKm} km</td>
+                      <td>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          disabled={deleteRoute.isPending}
+                          onClick={() => deleteRoute.mutate(r.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
